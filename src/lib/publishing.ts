@@ -26,7 +26,10 @@ export function isPublishMode(value: string): value is PublishMode {
 }
 
 export function isValidSlug(slug: string): boolean {
-	return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(slug);
+	// No consecutive hyphens: Vercel project names reject `---` and DNS labels dislike runs of `-`.
+	return (
+		/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(slug) && !slug.includes('--')
+	);
 }
 
 /** Client-safe URL hint from publish mode + host provider (no server config). */

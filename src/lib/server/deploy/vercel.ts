@@ -33,11 +33,26 @@ async function vercelFetch(
 	});
 }
 
+/**
+ * Vercel project names: lowercase; letters, digits, `.`, `_`, `-`; max 100;
+ * cannot contain `---` (https://vercel.com/docs/projects/overview#project-name).
+ */
+export function vercelProjectName(slug: string): string {
+	let name = `skinnystatus-${slug}`
+		.toLowerCase()
+		.replace(/[^a-z0-9._-]+/g, '-')
+		.replace(/-{2,}/g, '-')
+		.replace(/^[-._]+|[-._]+$/g, '')
+		.slice(0, 100)
+		.replace(/[-._]+$/g, '');
+	return name || 'skinnystatus';
+}
+
 export const vercelAdapter: DeployAdapter = {
 	provider: 'vercel',
 	async deploy(input: DeployInput): Promise<DeployResult> {
 		const { token, teamId } = requireToken(input.credentials);
-		const name = `skinnystatus-${input.project.slug}`.slice(0, 52);
+		const name = vercelProjectName(input.project.slug);
 
 		const files = input.files.map((f) => ({
 			file: f.path.replace(/^\//, ''),

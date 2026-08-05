@@ -204,6 +204,7 @@ export function slugFromEmail(email: string): string {
 		.split('@')[0]
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/-{2,}/g, '-')
 		.replace(/^-+|-+$/g, '')
 		.slice(0, 40);
 	if (isValidSlug(local)) return local;
