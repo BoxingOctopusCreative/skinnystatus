@@ -20,8 +20,6 @@ services:
       NODE_ENV: production
       CLOUDFLARE_TURNSTILE_ENABLED: $CLOUDFLARE_TURNSTILE_ENABLED
       CLOUDFLARE_TURNSTILE_SITEKEY: $CLOUDFLARE_TURNSTILE_SITEKEY
-    depends_on:
-      - api
     # Node is always present: built-in http client (no curl/wget in image).
     healthcheck:
       test:
@@ -39,21 +37,21 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=shared-network
-      - traefik.http.routers.kurator-web.rule=Host(`kuratorapp.cc`) && !PathPrefix(`/api`) && !Path(`/health`) && !PathPrefix(`/webhooks`)
-      - traefik.http.routers.kurator-web.priority=1
-      - traefik.http.routers.kurator-web.service=kurator-web
-      - traefik.http.routers.kurator-web.tls=true
-      - traefik.http.routers.kurator-web.entrypoints=websecure
-      - traefik.http.routers.kurator-web.tls.certresolver=leresolver
-      - traefik.http.services.kurator-web.loadbalancer.server.port=3000
-      - traefik.http.middlewares.kurator-web.headers.SSLRedirect=true
-      - traefik.http.middlewares.kurator-web.headers.STSSeconds=315360000
-      - traefik.http.middlewares.kurator-web.headers.browserXSSFilter=true
-      - traefik.http.middlewares.kurator-web.headers.contentTypeNosniff=true
-      - traefik.http.middlewares.kurator-web.headers.forceSTSHeader=true
-      - traefik.http.middlewares.kurator-web.headers.SSLHost=kuratorapp.cc
-      - traefik.http.middlewares.kurator-web.headers.STSIncludeSubdomains=true
-      - traefik.http.middlewares.kurator-web.headers.STSPreload=true
+      - traefik.http.routers.skinnystatus-web.rule=Host(`skinnystatus.app`) && !PathPrefix(`/api`) && !Path(`/health`) && !PathPrefix(`/webhooks`)
+      - traefik.http.routers.skinnystatus-web.priority=1
+      - traefik.http.routers.skinnystatus-web.service=skinnystatus-web
+      - traefik.http.routers.skinnystatus-web.tls=true
+      - traefik.http.routers.skinnystatus-web.entrypoints=websecure
+      - traefik.http.routers.skinnystatus-web.tls.certresolver=leresolver
+      - traefik.http.services.skinnystatus-web.loadbalancer.server.port=3000
+      - traefik.http.middlewares.skinnystatus-web.headers.SSLRedirect=true
+      - traefik.http.middlewares.skinnystatus-web.headers.STSSeconds=315360000
+      - traefik.http.middlewares.skinnystatus-web.headers.browserXSSFilter=true
+      - traefik.http.middlewares.skinnystatus-web.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.skinnystatus-web.headers.forceSTSHeader=true
+      - traefik.http.middlewares.skinnystatus-web.headers.SSLHost=skinnystatus.app
+      - traefik.http.middlewares.skinnystatus-web.headers.STSIncludeSubdomains=true
+      - traefik.http.middlewares.skinnystatus-web.headers.STSPreload=true
       - wud.watch=true
       - wud.tag.include=^\d+\.\d+\.\d+$      # only track real semver tags
       - wud.trigger.include=docker.autoupdate
