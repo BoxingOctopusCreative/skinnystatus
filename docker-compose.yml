@@ -30,7 +30,8 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=shared-network
-      - traefik.http.routers.skinnystatus-web.rule=Host(`skinnystatus.app`) && !PathPrefix(`/api`) && !Path(`/health`) && !PathPrefix(`/webhooks`)
+      # Single SvelteKit service owns /api/auth, /api/v1, /api/stripe/webhook, /api/health
+      - traefik.http.routers.skinnystatus-web.rule=Host(`skinnystatus.app`)
       - traefik.http.routers.skinnystatus-web.priority=1
       - traefik.http.routers.skinnystatus-web.service=skinnystatus-web
       - traefik.http.routers.skinnystatus-web.tls=true
