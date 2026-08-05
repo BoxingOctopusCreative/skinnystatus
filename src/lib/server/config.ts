@@ -191,6 +191,15 @@ function firstEnv(...keys: string[]): string | undefined {
 	return undefined;
 }
 
+/** Site origin only; ignores Vite's relative `BASE_URL` (e.g. `/`). */
+function firstAbsoluteHttpUrl(...keys: string[]): string | undefined {
+	for (const key of keys) {
+		const value = env(key);
+		if (value !== undefined && /^https?:\/\//i.test(value)) return value;
+	}
+	return undefined;
+}
+
 function emptyToNull(value: string | undefined | null): string | null {
 	if (value === undefined || value === null || value === '') return null;
 	return value;
@@ -578,7 +587,8 @@ function buildConfig(): AppConfig {
 		site: {
 			name: BRAND_NAME,
 			description: firstEnv('SITE_DESCRIPTION') ?? DEFAULTS.site.description,
-			baseUrl: firstEnv('ORIGIN', 'BASE_URL', 'SITE_BASE_URL') ?? DEFAULTS.site.baseUrl
+			baseUrl:
+				firstAbsoluteHttpUrl('ORIGIN', 'BASE_URL', 'SITE_BASE_URL') ?? DEFAULTS.site.baseUrl
 		},
 		database: {
 			url: databaseUrl

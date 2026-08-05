@@ -20,6 +20,9 @@ afterEach(() => {
 	delete process.env.SITE_DESCRIPTION;
 	delete process.env.CHECKS_INTERVAL_SECONDS;
 	delete process.env.SITE_NAME;
+	delete process.env.ORIGIN;
+	delete process.env.BASE_URL;
+	delete process.env.SITE_BASE_URL;
 	delete process.env.INFISICAL_DISABLE;
 	delete process.env.INFISICAL_CLIENT_ID;
 	delete process.env.INFISICAL_CLIENT_SECRET;
@@ -58,9 +61,26 @@ describe('getConfig / initConfig', () => {
 		expect(isPostgresUrl(config.database.url)).toBe(true);
 	});
 
-	it('loads ORIGIN from the project .env file', async () => {
+	it('uses ORIGIN for site.baseUrl', async () => {
 		disableInfisicalForTests();
-		delete process.env.ORIGIN;
+		process.env.ORIGIN = 'https://status.example.com';
+		process.env.BASE_URL = '/';
+		process.env.DATABASE_URL = PG_URL;
+		resetDotEnvForTests();
+		resetConfigCache();
+		disableInfisicalForTests();
+
+		await initConfig();
+		const config = getConfig();
+		expect(config.site.baseUrl).toBe('https://status.example.com');
+	});
+
+	it('ignores relative BASE_URL and falls back to the default origin', async () => {
+		disableInfisicalForTests();
+		// Empty string blocks .env from filling ORIGIN; env() still treats it as unset.
+		process.env.ORIGIN = '';
+		process.env.SITE_BASE_URL = '';
+		process.env.BASE_URL = '/';
 		process.env.DATABASE_URL = PG_URL;
 		resetDotEnvForTests();
 		resetConfigCache();
