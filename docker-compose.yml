@@ -18,8 +18,7 @@ services:
       API_INTERNAL_URL: http://10.0.0.80:3000
       NEXT_PUBLIC_API_URL: http://10.0.0.80:3000
       NODE_ENV: production
-      CLOUDFLARE_TURNSTILE_ENABLED: $CLOUDFLARE_TURNSTILE_ENABLED
-      CLOUDFLARE_TURNSTILE_SITEKEY: $CLOUDFLARE_TURNSTILE_SITEKEY
+      CLOUDFLARE_TURNSTILE_ENABLED: true
     # Node is always present: built-in http client (no curl/wget in image).
     healthcheck:
       test:
