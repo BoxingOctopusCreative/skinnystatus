@@ -5,20 +5,14 @@ services:
       shared-network:
         ipv4_address: 10.0.0.80
     environment:
-      # Infisical Machine Identity (Universal Auth). When set, web loads /ui recursively and also /shared.
-      # Env vars below remain overrides. NEXT_PUBLIC_* still need build-args for the browser bundle.
-      INFISICAL_UNIVERSAL_AUTH_CLIENT_ID: $INFISICAL_UNIVERSAL_AUTH_CLIENT_ID
-      INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET: $INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET
+      # Infisical Machine Identity (Universal Auth). App also accepts INFISICAL_UNIVERSAL_AUTH_CLIENT_*.
+      INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID:-${INFISICAL_UNIVERSAL_AUTH_CLIENT_ID}}
+      INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET:-${INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET}}
       INFISICAL_PROJECT_ID: $INFISICAL_PROJECT_ID
       INFISICAL_ENVIRONMENT: $INFISICAL_ENVIRONMENT
       INFISICAL_SITE_URL: ${INFISICAL_SITE_URL:-https://app.infisical.com}
-      # Leave unset to use web default /ui (also fetches /shared). Override only if needed:
-      # INFISICAL_SECRET_PATH: /ui
-      # Runtime proxy target for same-origin /api/v1/* (see web/app/api/v1/[[...path]]/route.ts).
-      API_INTERNAL_URL: http://10.0.0.80:3000
-      NEXT_PUBLIC_API_URL: http://10.0.0.80:3000
       NODE_ENV: production
-      CLOUDFLARE_TURNSTILE_ENABLED: true
+      ORIGIN: https://skinnystatus.app
     # Node is always present: built-in http client (no curl/wget in image).
     healthcheck:
       test:

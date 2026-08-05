@@ -15,10 +15,14 @@ let dotenvLoaded = false;
 const INFISICAL_ENV_KEYS = new Set([
 	'INFISICAL_CLIENT_ID',
 	'INFISICAL_CLIENT_SECRET',
+	'INFISICAL_UNIVERSAL_AUTH_CLIENT_ID',
+	'INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET',
 	'INFISICAL_PROJECT_ID',
 	'INFISICAL_ENVIRONMENT',
 	'INFISICAL_SITE_URL'
 ]);
+
+const LOG_PREFIX = '[skinnystatus]';
 
 export function loadDotEnvFile(): void {
 	if (dotenvLoaded) return;
@@ -218,32 +222,79 @@ function requirePostgresUrl(url: string): string {
 	return url;
 }
 
+/** Prefer INFISICAL_CLIENT_*; also accept Infisical CLI-style UNIVERSAL_AUTH_* names. */
+function infisicalClientId(): string | undefined {
+	return firstEnv('INFISICAL_CLIENT_ID', 'INFISICAL_UNIVERSAL_AUTH_CLIENT_ID');
+}
+
+function infisicalClientSecret(): string | undefined {
+	return firstEnv('INFISICAL_CLIENT_SECRET', 'INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET');
+}
+
 function infisicalCredentialsPresent(): boolean {
-	return Boolean(
-		env('INFISICAL_CLIENT_ID') && env('INFISICAL_CLIENT_SECRET') && env('INFISICAL_PROJECT_ID')
+	return Boolean(infisicalClientId() && infisicalClientSecret() && env('INFISICAL_PROJECT_ID'));
+}
+
+function logInfisicalCredentialGaps(): void {
+	const missing: string[] = [];
+	if (!infisicalClientId()) {
+		missing.push('INFISICAL_CLIENT_ID (or INFISICAL_UNIVERSAL_AUTH_CLIENT_ID)');
+	}
+	if (!infisicalClientSecret()) {
+		missing.push('INFISICAL_CLIENT_SECRET (or INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET)');
+	}
+	if (!env('INFISICAL_PROJECT_ID')) {
+		missing.push('INFISICAL_PROJECT_ID');
+	}
+	console.info(
+		`${LOG_PREFIX} Infisical: credentials incomplete; skipping secret load. Missing: ${missing.join(', ')}`
 	);
 }
 
 async function loadInfisicalSecrets(): Promise<void> {
-	if (env('INFISICAL_DISABLE') === '1' || env('INFISICAL_DISABLE') === 'true') return;
-	if (!infisicalCredentialsPresent()) return;
+	if (env('INFISICAL_DISABLE') === '1' || env('INFISICAL_DISABLE') === 'true') {
+		console.info(`${LOG_PREFIX} Infisical: disabled via INFISICAL_DISABLE`);
+		return;
+	}
+	if (!infisicalCredentialsPresent()) {
+		logInfisicalCredentialGaps();
+		return;
+	}
 
-	const clientId = env('INFISICAL_CLIENT_ID')!;
-	const clientSecret = env('INFISICAL_CLIENT_SECRET')!;
+	const clientId = infisicalClientId()!;
+	const clientSecret = infisicalClientSecret()!;
 	const projectId = env('INFISICAL_PROJECT_ID')!;
 	const environment = env('INFISICAL_ENVIRONMENT') ?? 'dev';
-	const siteUrl = env('INFISICAL_SITE_URL');
+	const siteUrl = env('INFISICAL_SITE_URL') ?? 'https://app.infisical.com';
 
-	const client = new InfisicalSDK(siteUrl ? { siteUrl } : undefined);
-	await client.auth().universalAuth.login({ clientId, clientSecret });
+	console.info(
+		`${LOG_PREFIX} Infisical: connecting to ${siteUrl} (project=${projectId}, environment=${environment})`
+	);
 
-	await client.secrets().listSecrets({
-		projectId,
-		environment,
-		expandSecretReferences: true,
-		viewSecretValue: true,
-		attachToProcessEnv: true
-	});
+	const client = new InfisicalSDK({ siteUrl });
+	try {
+		await client.auth().universalAuth.login({ clientId, clientSecret });
+		console.info(`${LOG_PREFIX} Infisical: Universal Auth login ok`);
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		console.error(`${LOG_PREFIX} Infisical: Universal Auth login failed: ${message}`);
+		throw err;
+	}
+
+	try {
+		await client.secrets().listSecrets({
+			projectId,
+			environment,
+			expandSecretReferences: true,
+			viewSecretValue: true,
+			attachToProcessEnv: true
+		});
+		console.info(`${LOG_PREFIX} Infisical: root secrets attached to process.env`);
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		console.error(`${LOG_PREFIX} Infisical: listSecrets failed: ${message}`);
+		throw err;
+	}
 
 	// Database URL lives at Infisical path /db/url (folder /db, secret key url)
 	const dbSecret = await client.secrets().getSecret({
@@ -259,6 +310,7 @@ async function loadInfisicalSecrets(): Promise<void> {
 		throw new Error('Infisical secret /db/url is empty');
 	}
 	process.env.DATABASE_URL = dbUrl;
+	console.info(`${LOG_PREFIX} Infisical: loaded /db/url`);
 
 	// Better Auth secret lives at Infisical path /app/auth_secret
 	const authSecret = await client.secrets().getSecret({
@@ -274,6 +326,7 @@ async function loadInfisicalSecrets(): Promise<void> {
 		throw new Error('Infisical secret /app/auth_secret is empty');
 	}
 	process.env.AUTH_SECRET = authSecretValue;
+	console.info(`${LOG_PREFIX} Infisical: loaded /app/auth_secret`);
 
 	// Mailgun settings live under Infisical path /mailgun
 	await loadMailgunFromInfisical(client, projectId, environment);
@@ -295,6 +348,8 @@ async function loadInfisicalSecrets(): Promise<void> {
 
 	// Sentry under Infisical path /sentry
 	await loadSentryFromInfisical(client, projectId, environment);
+
+	console.info(`${LOG_PREFIX} Infisical: secret load complete`);
 }
 
 const MAILGUN_SECRET_ENV: Record<string, string> = {
