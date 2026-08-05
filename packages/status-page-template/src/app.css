@@ -1,0 +1,22 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+
+@import '@skeletonlabs/skeleton';
+@import '@skeletonlabs/skeleton-svelte';
+@import './themes/skinnystatus.css';
+
+@custom-variant dark (&:where([data-mode=dark], [data-mode=dark] *));
+
+.status-theme-bridge {
+	--color-primary-500: var(--tenant-accent, #1ca048);
+	--color-primary-400: var(--tenant-accent, #54b775);
+	--color-success-500: var(--tenant-ok, #1ca048);
+	--color-warning-500: var(--tenant-warn, #f59e0b);
+	--color-error-500: var(--tenant-bad, #ef4444);
+	--typo-anchor--color-light: var(--tenant-accent, #1ca048);
+	--typo-anchor--color-dark: var(--tenant-accent, #54b775);
+}
+
+@utility font-mono-status {
+	font-family: ui-monospace, Menlo, monospace;
+}

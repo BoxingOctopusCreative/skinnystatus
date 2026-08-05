@@ -1,0 +1,24 @@
+---
+description: Never use em dashes in SkinnyStatus copy or UI text
+alwaysApply: true
+---
+
+# No em dashes
+
+Never use the em dash character (`—`, U+2014) in this app.
+
+Applies to:
+- Website and UI copy
+- Emails and user-facing messages
+- README and in-app docs
+- Comments and log/error strings in this repo
+
+Use a period, comma, colon, parentheses, or a regular hyphen (`-`) instead.
+
+```text
+❌ brand name — preview before you publish
+✅ brand name. Preview before you publish
+
+❌ n/a shown as —
+✅ n/a shown as -
+```

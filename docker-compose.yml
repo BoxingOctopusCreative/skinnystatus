@@ -1,0 +1,63 @@
+services:
+  web:
+    image: ghcr.io/boxingoctopuscreative/skinnystatus:latest
+    networks:
+      shared-network:
+        ipv4_address: 10.0.0.80
+    environment:
+      # Infisical Machine Identity (Universal Auth). When set, web loads /ui recursively and also /shared.
+      # Env vars below remain overrides. NEXT_PUBLIC_* still need build-args for the browser bundle.
+      INFISICAL_UNIVERSAL_AUTH_CLIENT_ID: $INFISICAL_UNIVERSAL_AUTH_CLIENT_ID
+      INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET: $INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET
+      INFISICAL_PROJECT_ID: $INFISICAL_PROJECT_ID
+      INFISICAL_ENVIRONMENT: $INFISICAL_ENVIRONMENT
+      INFISICAL_SITE_URL: ${INFISICAL_SITE_URL:-https://app.infisical.com}
+      # Leave unset to use web default /ui (also fetches /shared). Override only if needed:
+      # INFISICAL_SECRET_PATH: /ui
+      # Runtime proxy target for same-origin /api/v1/* (see web/app/api/v1/[[...path]]/route.ts).
+      API_INTERNAL_URL: http://10.0.0.80:3000
+      NEXT_PUBLIC_API_URL: http://10.0.0.80:3000
+      NODE_ENV: production
+      CLOUDFLARE_TURNSTILE_ENABLED: $CLOUDFLARE_TURNSTILE_ENABLED
+      CLOUDFLARE_TURNSTILE_SITEKEY: $CLOUDFLARE_TURNSTILE_SITEKEY
+    depends_on:
+      - api
+    # Node is always present: built-in http client (no curl/wget in image).
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3000/',(r)=>{r.resume();r.on('end',()=>process.exit(r.statusCode>=200&&r.statusCode<400?0:1));}).on('error',()=>process.exit(1));",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=shared-network
+      - traefik.http.routers.kurator-web.rule=Host(`kuratorapp.cc`) && !PathPrefix(`/api`) && !Path(`/health`) && !PathPrefix(`/webhooks`)
+      - traefik.http.routers.kurator-web.priority=1
+      - traefik.http.routers.kurator-web.service=kurator-web
+      - traefik.http.routers.kurator-web.tls=true
+      - traefik.http.routers.kurator-web.entrypoints=websecure
+      - traefik.http.routers.kurator-web.tls.certresolver=leresolver
+      - traefik.http.services.kurator-web.loadbalancer.server.port=3000
+      - traefik.http.middlewares.kurator-web.headers.SSLRedirect=true
+      - traefik.http.middlewares.kurator-web.headers.STSSeconds=315360000
+      - traefik.http.middlewares.kurator-web.headers.browserXSSFilter=true
+      - traefik.http.middlewares.kurator-web.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.kurator-web.headers.forceSTSHeader=true
+      - traefik.http.middlewares.kurator-web.headers.SSLHost=kuratorapp.cc
+      - traefik.http.middlewares.kurator-web.headers.STSIncludeSubdomains=true
+      - traefik.http.middlewares.kurator-web.headers.STSPreload=true
+      - wud.watch=true
+      - wud.tag.include=^\d+\.\d+\.\d+$      # only track real semver tags
+      - wud.trigger.include=docker.autoupdate
+
+networks:
+  shared-network:
+    external: true

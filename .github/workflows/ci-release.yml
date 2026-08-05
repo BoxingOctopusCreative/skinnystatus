@@ -1,0 +1,116 @@
+name: CI and release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check-skip:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip.outputs.should_skip }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for CI or INFO commit prefix
+        id: skip
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          if [[ "$COMMIT_MSG" =~ ^(CI|INFO): ]]; then
+            echo "should_skip=true" >> "$GITHUB_OUTPUT"
+            echo "Commit starts with CI/INFO. Skipping build/release."
+          else
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  unit-tests:
+    needs: [check-skip]
+    if: needs.check-skip.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Typecheck
+        run: npm run check
+
+  release:
+    needs: [unit-tests, check-skip]
+    if: |
+      needs.check-skip.outputs.should_skip != 'true' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lowercase owner for GHCR
+        id: ns
+        run: echo "owner_lc=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: "Bump SemVer tag"
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release_branches: main
+          default_bump: patch
+          # MAJOR:/MINOR:/PATCH: bump accordingly. CI:/INFO: produce no tag.
+          custom_release_rules: "MAJOR:major,MINOR:minor,PATCH:patch,CI:none,INFO:none"
+
+      - name: Set up Docker Buildx
+        if: steps.tag_version.outputs.new_tag != ''
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.tag_version.outputs.new_tag != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        if: steps.tag_version.outputs.new_tag != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.ns.outputs.owner_lc }}/skinnystatus:${{ steps.tag_version.outputs.new_tag }}
+            ghcr.io/${{ steps.ns.outputs.owner_lc }}/skinnystatus:latest
+          labels: |
+            org.opencontainers.image.version=${{ steps.tag_version.outputs.new_tag }}
+
+      - name: Create GitHub Release
+        if: steps.tag_version.outputs.new_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          generate_release_notes: true
