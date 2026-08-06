@@ -23,6 +23,8 @@
 	let createSlug = $state('');
 	let createMode = $state<PublishMode>('path');
 	let createProvider = $state<HostProvider>('vercel');
+	let createBaseDomain = $state('');
+	let createPathPrefix = $state('s');
 	let projectDialog = $state<HTMLDialogElement | null>(null);
 	let selectedProjectId = $state<string | null>(null);
 	let expandedProjectIds = $state<Record<string, boolean>>({});
@@ -32,8 +34,8 @@
 			slug: createSlug,
 			publishMode: createMode,
 			hostProvider: createProvider,
-			pathPrefix: data.pathPrefix,
-			apexDomain: data.apexDomain
+			pathPrefix: createPathPrefix,
+			apexDomain: createBaseDomain
 		})
 	);
 
@@ -153,14 +155,6 @@
 	</p>
 </div>
 
-{#if !data.apexDomain}
-	<p class="text-sm text-surface-500 mb-3">
-		No publish base domain set.
-		<a href="/dashboard/settings?team={data.team.id}">Set it in Settings → Publishing</a>
-		for subdomain DNS hints.
-	</p>
-{/if}
-
 {#if form?.message}
 	<p class="text-error-500 text-sm mb-3">
 		{form.message}
@@ -215,6 +209,27 @@
 							<option value={provider}>{providerLabels[provider] ?? provider}</option>
 						{/each}
 					</select>
+				</label>
+				<label class="label">
+					<span class="label-text">Base domain</span>
+					<input
+						class="input"
+						name="publishBaseDomain"
+						bind:value={createBaseDomain}
+						placeholder="status.example.com"
+						autocomplete="off"
+					/>
+				</label>
+				<label class="label">
+					<span class="label-text">Path prefix</span>
+					<input
+						class="input"
+						name="publishPathPrefix"
+						bind:value={createPathPrefix}
+						required
+						pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+						autocomplete="off"
+					/>
 				</label>
 			</div>
 			<label class="label">
@@ -433,8 +448,6 @@
 						project={selectedProject}
 						modes={data.modes}
 						providers={data.providers}
-						pathPrefix={data.pathPrefix}
-						apexDomain={data.apexDomain}
 						providerReady={data.providerReady}
 						{providerLabels}
 					/>

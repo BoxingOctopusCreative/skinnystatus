@@ -90,9 +90,7 @@ export async function prepareDeployFiles(project: StatusPageInfo): Promise<{
 		);
 	}
 
-	const { getTeamPublishSettings } = await import('$lib/server/publishing');
-	const settings = await getTeamPublishSettings(project.teamId);
-	const pathPrefix = settings.publishPathPrefix || 's';
+	const pathPrefix = project.publishPathPrefix || 's';
 	const basePath =
 		project.publishMode === 'path' ? `/${pathPrefix}/${project.slug}` : '';
 

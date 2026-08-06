@@ -43,7 +43,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	try {
 		const result = await subscribeEmail(row.id, email);
 		const page = pageInfoFromRow(row);
-		const pageUrl = page.deployUrl ?? (await canonicalPageUrl(page));
+		const pageUrl = page.deployUrl ?? canonicalPageUrl(page);
 
 		if (result.created) {
 			try {

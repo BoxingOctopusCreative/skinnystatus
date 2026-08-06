@@ -15,10 +15,6 @@ import {
 import type { StatusPageRow } from '$lib/server/db/queries';
 import { sendEmail } from '$lib/server/mailgun';
 import type { TeamRole } from '$lib/server/db/schema.pg';
-import {
-	normalizePublishBaseDomain,
-	normalizePublishPathPrefix
-} from '$lib/publishing';
 
 export const INVITE_GRACE_DAYS = 7;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -69,8 +65,6 @@ export type TeamRow = {
 	billingOrgId: string;
 	createdByUserId: string;
 	bannerImage: string | null;
-	publishBaseDomain: string | null;
-	publishPathPrefix: string;
 	createdAt: Date;
 	updatedAt: Date;
 };
@@ -83,8 +77,6 @@ function teamSelectFields() {
 		billingOrgId: team.billingOrgId,
 		createdByUserId: team.createdByUserId,
 		bannerImage: team.bannerImage,
-		publishBaseDomain: team.publishBaseDomain,
-		publishPathPrefix: team.publishPathPrefix,
 		createdAt: team.createdAt,
 		updatedAt: team.updatedAt
 	};
@@ -97,8 +89,6 @@ function toTeamRow(row: {
 	billingOrgId: string;
 	createdByUserId: string;
 	bannerImage: string | null;
-	publishBaseDomain: string | null;
-	publishPathPrefix: string;
 	createdAt: Date;
 	updatedAt: Date;
 }): TeamRow {
@@ -109,8 +99,6 @@ function toTeamRow(row: {
 		billingOrgId: row.billingOrgId,
 		createdByUserId: row.createdByUserId,
 		bannerImage: row.bannerImage,
-		publishBaseDomain: row.publishBaseDomain,
-		publishPathPrefix: row.publishPathPrefix || 's',
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt
 	};
@@ -216,8 +204,6 @@ export async function listManageableTeamsForUser(userId: string): Promise<TeamRo
 				billingOrgId: row.billingOrgId,
 				createdByUserId: row.createdByUserId,
 				bannerImage: row.bannerImage,
-				publishBaseDomain: row.publishBaseDomain,
-				publishPathPrefix: row.publishPathPrefix,
 				createdAt: row.createdAt,
 				updatedAt: row.updatedAt
 			})
@@ -231,27 +217,6 @@ export async function getTeamById(teamId: string): Promise<TeamRow | undefined> 
 	return row ? toTeamRow(row) : undefined;
 }
 
-function defaultPublishSettingsFromEnv(): {
-	publishBaseDomain: string | null;
-	publishPathPrefix: string;
-} {
-	let publishBaseDomain: string | null = null;
-	let publishPathPrefix = 's';
-	try {
-		const rawDomain = process.env.PUBLISHING_BASE_DOMAIN ?? process.env.PUBLISHING_APEX_DOMAIN;
-		if (rawDomain) publishBaseDomain = normalizePublishBaseDomain(rawDomain);
-	} catch {
-		publishBaseDomain = null;
-	}
-	try {
-		const rawPrefix = process.env.PUBLISHING_PATH_PREFIX;
-		if (rawPrefix) publishPathPrefix = normalizePublishPathPrefix(rawPrefix);
-	} catch {
-		publishPathPrefix = 's';
-	}
-	return { publishBaseDomain, publishPathPrefix };
-}
-
 export async function createTeam(userId: string, name: string): Promise<TeamRow> {
 	const trimmed = name.trim();
 	if (!trimmed) throw new Error('Team name is required');
@@ -262,7 +227,6 @@ export async function createTeam(userId: string, name: string): Promise<TeamRow>
 	const slug = await allocateTeamSlug(slugifyTeamName(trimmed));
 	const id = crypto.randomUUID();
 	const now = new Date();
-	const publish = defaultPublishSettingsFromEnv();
 
 	await db.insert(team).values({
 		id,
@@ -270,8 +234,6 @@ export async function createTeam(userId: string, name: string): Promise<TeamRow>
 		slug,
 		billingOrgId: org.id,
 		createdByUserId: userId,
-		publishBaseDomain: publish.publishBaseDomain,
-		publishPathPrefix: publish.publishPathPrefix,
 		createdAt: now,
 		updatedAt: now
 	});
@@ -290,31 +252,9 @@ export async function createTeam(userId: string, name: string): Promise<TeamRow>
 		billingOrgId: org.id,
 		createdByUserId: userId,
 		bannerImage: null,
-		publishBaseDomain: publish.publishBaseDomain,
-		publishPathPrefix: publish.publishPathPrefix,
 		createdAt: now,
 		updatedAt: now
 	};
-}
-
-export async function updateTeamPublishing(
-	teamId: string,
-	opts: { publishBaseDomain: string; publishPathPrefix: string }
-): Promise<TeamRow> {
-	const publishBaseDomain = normalizePublishBaseDomain(opts.publishBaseDomain);
-	const publishPathPrefix = normalizePublishPathPrefix(opts.publishPathPrefix);
-	const now = new Date();
-	await db
-		.update(team)
-		.set({
-			publishBaseDomain,
-			publishPathPrefix,
-			updatedAt: now
-		})
-		.where(eq(team.id, teamId));
-	const row = await getTeamById(teamId);
-	if (!row) throw new Error('Team not found');
-	return row;
 }
 
 /** Ensure the user belongs to at least one team (creates a personal team if needed). */

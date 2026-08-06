@@ -12,6 +12,10 @@ import {
 import { toPublicCheckSettings } from '$lib/server/checks';
 import { canonicalPageUrl, publishUrlHint } from '$lib/server/publishing';
 import { HOST_PROVIDERS, isHostProvider, PUBLISH_MODES } from '$lib/publishing';
+import {
+	normalizePublishBaseDomain,
+	normalizePublishPathPrefix
+} from '$lib/publishing';
 import type { PublicCheckSettings } from '$lib/checks';
 import {
 	serializePageTheme,
@@ -40,28 +44,24 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 
 	const pages = await listStatusPagesForTeam(team.id);
 	const canManageLifecycle = roleAtLeast(team.role, 'admin');
-	const pathPrefix = team.publishPathPrefix || 's';
-	const apexDomain = team.publishBaseDomain ?? '';
 
-	const projects = await Promise.all(
-		pages
-			.filter((p) => canManageLifecycle || p.deletedAt == null)
-			.map(async (p) => {
-				const info = toPageInfo(p);
-				return {
-					...info,
-					theme: parsePageTheme(p.themeJson),
-					url: info.deployUrl ?? (await canonicalPageUrl(info)),
-					urlHint: await publishUrlHint(info),
-					published: p.published,
-					deletedAt: p.deletedAt,
-					undeleteExpiresAt: p.deletedAt
-						? new Date(p.deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000)
-						: null,
-					canManageLifecycle
-				};
-			})
-	);
+	const projects = pages
+		.filter((p) => canManageLifecycle || p.deletedAt == null)
+		.map((p) => {
+			const info = toPageInfo(p);
+			return {
+				...info,
+				theme: parsePageTheme(p.themeJson),
+				url: info.deployUrl ?? canonicalPageUrl(info),
+				urlHint: publishUrlHint(info),
+				published: p.published,
+				deletedAt: p.deletedAt,
+				undeleteExpiresAt: p.deletedAt
+					? new Date(p.deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000)
+					: null,
+				canManageLifecycle
+			};
+		});
 
 	const servicesByProjectId: Record<
 		string,
@@ -98,8 +98,6 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 		canManageLifecycle,
 		modes: PUBLISH_MODES,
 		providers: HOST_PROVIDERS,
-		pathPrefix,
-		apexDomain,
 		defaultTheme: DEFAULT_PAGE_THEME,
 		providerReady: await providerReadyMap(team.id)
 	};
@@ -123,6 +121,21 @@ export const actions: Actions = {
 		const publishMode = form.get('publishMode')?.toString() ?? 'path';
 		const hostProvider = form.get('hostProvider')?.toString() ?? 'vercel';
 		const theme = themeFromForm(form);
+
+		let publishBaseDomain: string | null = null;
+		let publishPathPrefix = 's';
+		try {
+			publishBaseDomain = normalizePublishBaseDomain(
+				form.get('publishBaseDomain')?.toString() ?? ''
+			);
+			publishPathPrefix = normalizePublishPathPrefix(
+				form.get('publishPathPrefix')?.toString() ?? 's'
+			);
+		} catch (err) {
+			return fail(400, {
+				message: err instanceof Error ? err.message : 'Invalid publishing settings'
+			});
+		}
 
 		if (!name) return fail(400, { message: 'Name is required' });
 		if (!isValidSlug(slug)) {
@@ -153,6 +166,8 @@ export const actions: Actions = {
 				description,
 				publishMode,
 				hostProvider,
+				publishBaseDomain,
+				publishPathPrefix,
 				ownerId: locals.user.id,
 				teamId: team.id,
 				themeJson: serializePageTheme(theme)
@@ -174,6 +189,21 @@ export const actions: Actions = {
 		const publishMode = form.get('publishMode')?.toString() ?? 'path';
 		const hostProvider = form.get('hostProvider')?.toString() ?? 'vercel';
 		const theme = themeFromForm(form);
+
+		let publishBaseDomain: string | null = null;
+		let publishPathPrefix = 's';
+		try {
+			publishBaseDomain = normalizePublishBaseDomain(
+				form.get('publishBaseDomain')?.toString() ?? ''
+			);
+			publishPathPrefix = normalizePublishPathPrefix(
+				form.get('publishPathPrefix')?.toString() ?? 's'
+			);
+		} catch (err) {
+			return fail(400, {
+				message: err instanceof Error ? err.message : 'Invalid publishing settings'
+			});
+		}
 
 		if (!id || !name) return fail(400, { message: 'ID and name are required' });
 		if (!isValidSlug(slug)) {
@@ -199,6 +229,8 @@ export const actions: Actions = {
 						description,
 						publishMode,
 						hostProvider,
+						publishBaseDomain,
+						publishPathPrefix,
 						themeJson: serializePageTheme(theme),
 						updatedAt: new Date()
 					})

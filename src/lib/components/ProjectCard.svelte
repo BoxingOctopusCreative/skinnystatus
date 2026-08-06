@@ -12,8 +12,6 @@
 		project,
 		modes,
 		providers,
-		pathPrefix,
-		apexDomain,
 		providerReady,
 		providerLabels
 	}: {
@@ -24,6 +22,8 @@
 			description: string | null;
 			publishMode: PublishMode;
 			hostProvider: HostProvider;
+			publishBaseDomain: string | null;
+			publishPathPrefix: string;
 			teamId: string;
 			theme: PageTheme;
 			deployUrl: string | null;
@@ -36,8 +36,6 @@
 		};
 		modes: readonly PublishMode[];
 		providers: readonly HostProvider[];
-		pathPrefix: string;
-		apexDomain: string;
 		providerReady: Record<string, boolean>;
 		providerLabels: Record<string, string>;
 	} = $props();
@@ -45,6 +43,8 @@
 	let draftSlug = $state('');
 	let draftMode = $state<PublishMode>('path');
 	let draftProvider = $state<HostProvider>('vercel');
+	let draftBaseDomain = $state('');
+	let draftPathPrefix = $state('s');
 	let draftLogoUrl = $state('');
 	let logoPreviewFailed = $state(false);
 	let confirmInput = $state('');
@@ -53,6 +53,8 @@
 		draftSlug = project.slug;
 		draftMode = project.publishMode;
 		draftProvider = project.hostProvider;
+		draftBaseDomain = project.publishBaseDomain ?? '';
+		draftPathPrefix = project.publishPathPrefix || 's';
 		draftLogoUrl = project.theme.logoUrl;
 		logoPreviewFailed = false;
 	});
@@ -65,8 +67,8 @@
 			slug: draftSlug,
 			publishMode: draftMode,
 			hostProvider: draftProvider,
-			pathPrefix,
-			apexDomain
+			pathPrefix: draftPathPrefix,
+			apexDomain: draftBaseDomain
 		})
 	);
 </script>
@@ -108,20 +110,18 @@
 			</p>
 		{/if}
 		{#if draftMode === 'subdomain'}
-			{#if apexDomain}
+			{#if draftBaseDomain}
 				<p class="text-sm text-surface-500">
-					DNS: CNAME <code>{draftSlug || '<slug>'}.{apexDomain}</code> → your host provider
+					DNS: CNAME <code>{draftSlug || '<slug>'}.{draftBaseDomain}</code> → your host provider
 				</p>
 			{:else}
 				<p class="text-warning-500 text-sm">
-					Set a base domain under
-					<a href="/dashboard/settings?team={project.teamId}">Settings → Publishing</a>
-					for subdomain DNS hints.
+					Set a base domain on this project for subdomain DNS hints.
 				</p>
 			{/if}
 		{:else}
 			<p class="text-sm text-surface-500">
-				Path base: <code>/{pathPrefix}/{draftSlug || '<slug>'}</code>
+				Path base: <code>/{draftPathPrefix}/{draftSlug || '<slug>'}</code>
 			</p>
 		{/if}
 		{#if project.lastDeployError}
@@ -169,6 +169,27 @@
 							<option value={provider}>{providerLabels[provider] ?? provider}</option>
 						{/each}
 					</select>
+				</label>
+				<label class="label">
+					<span class="label-text">Base domain</span>
+					<input
+						class="input"
+						name="publishBaseDomain"
+						bind:value={draftBaseDomain}
+						placeholder="status.example.com"
+						autocomplete="off"
+					/>
+				</label>
+				<label class="label">
+					<span class="label-text">Path prefix</span>
+					<input
+						class="input"
+						name="publishPathPrefix"
+						bind:value={draftPathPrefix}
+						required
+						pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+						autocomplete="off"
+					/>
 				</label>
 			</div>
 			<label class="label">

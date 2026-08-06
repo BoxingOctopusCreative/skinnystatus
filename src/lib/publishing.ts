@@ -11,6 +11,10 @@ export type StatusPageInfo = {
 	description: string | null;
 	publishMode: PublishMode;
 	hostProvider: HostProvider;
+	/** Apex for subdomain hints; null until set on the project. */
+	publishBaseDomain: string | null;
+	/** Path segment for path-mode deploy nesting. */
+	publishPathPrefix: string;
 	teamId: string;
 	theme: PageTheme;
 	deployUrl: string | null;
@@ -35,7 +39,7 @@ export function isValidSlug(slug: string): boolean {
 /** Platform-fixed path prefix for admin preview routes (`/s/{slug}`). */
 export const PLATFORM_PATH_PREFIX = 's';
 
-/** Team path prefix for static-host nesting and URL hints. */
+/** Project path prefix for static-host nesting and URL hints. */
 export function isValidPublishPathPrefix(value: string): boolean {
 	return /^[a-z0-9]([a-z0-9-]{0,31}[a-z0-9])?$/.test(value) && !value.includes('--');
 }
@@ -111,6 +115,8 @@ export function pageInfoFromRow(row: {
 	description: string | null;
 	publishMode: string;
 	hostProvider?: string | null;
+	publishBaseDomain?: string | null;
+	publishPathPrefix?: string | null;
 	teamId?: string | null;
 	themeJson?: string | null;
 	deployUrl?: string | null;
@@ -130,6 +136,8 @@ export function pageInfoFromRow(row: {
 		description: row.description,
 		publishMode: mode,
 		hostProvider: provider,
+		publishBaseDomain: row.publishBaseDomain ?? null,
+		publishPathPrefix: row.publishPathPrefix?.trim() || 's',
 		teamId: row.teamId ?? '',
 		theme: parsePageTheme(row.themeJson),
 		deployUrl: row.deployUrl ?? null,

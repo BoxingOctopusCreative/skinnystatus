@@ -77,6 +77,13 @@ async function migrationAlreadyReflectedInSchema(
 	const sqlText = migration.sql.join('\n');
 
 	if (sqlText.includes('publish_path_prefix') || sqlText.includes('publish_base_domain')) {
+		// 0010 added these on team; 0011 moved them to status_page.
+		if (sqlText.includes('status_page')) {
+			return columnExists(sql, 'status_page', 'publish_path_prefix');
+		}
+		if (sqlText.includes('"team"') && sqlText.includes('DROP COLUMN')) {
+			return !(await columnExists(sql, 'team', 'publish_path_prefix'));
+		}
 		return columnExists(sql, 'team', 'publish_path_prefix');
 	}
 

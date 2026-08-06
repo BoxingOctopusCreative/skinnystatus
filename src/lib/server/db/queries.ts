@@ -80,6 +80,8 @@ export type StatusPageRow = {
 	description: string | null;
 	publishMode: string;
 	hostProvider: string;
+	publishBaseDomain: string | null;
+	publishPathPrefix: string;
 	ownerId: string | null;
 	teamId: string;
 	themeJson: string | null;
@@ -246,6 +248,8 @@ export async function ensureDefaultStatusPage(ownerId: string, opts?: {
 		description: config.site.description,
 		publishMode: 'path',
 		hostProvider: 'vercel',
+		publishBaseDomain: null,
+		publishPathPrefix: 's',
 		ownerId,
 		teamId: teamRow.id,
 		themeJson: serializePageTheme(theme),
@@ -260,6 +264,8 @@ export async function ensureDefaultStatusPage(ownerId: string, opts?: {
 		description: config.site.description,
 		publishMode: 'path',
 		hostProvider: 'vercel',
+		publishBaseDomain: null,
+		publishPathPrefix: 's',
 		ownerId,
 		teamId: teamRow.id,
 		themeJson: serializePageTheme(theme),
@@ -503,12 +509,10 @@ export async function getUserByEmail(
 
 export async function listPublicPages() {
 	const pages = await listStatusPages();
-	return Promise.all(
-		pages.map(async (p) => {
-			const info = toPageInfo(p);
-			return { ...info, url: info.deployUrl ?? (await canonicalPageUrl(info)) };
-		})
-	);
+	return pages.map((p) => {
+		const info = toPageInfo(p);
+		return { ...info, url: info.deployUrl ?? canonicalPageUrl(info) };
+	});
 }
 
 export { and, eq, ne, desc, gte, isValidSlug, isPublishMode, toPageInfo };

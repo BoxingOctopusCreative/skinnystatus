@@ -46,23 +46,24 @@ Set `ORIGIN` to the admin portal’s public URL so deployed status pages know wh
 
 ## Publishing
 
-Each **team** sets publish settings under **Dashboard → Settings → Publishing**:
+Each **project** sets publish settings (Dashboard → Projects):
 
 | Setting | Meaning |
 |---------|---------|
+| Slug | Unique public path/subdomain label |
 | Base domain | Apex for subdomain URL hints / DNS copy (`{slug}.your.domain`) |
 | Path prefix | Path segment for path-mode deploy nesting (`/{prefix}/{slug}/` on the static host) |
 
-Optional env `PUBLISHING_BASE_DOMAIN` / `PUBLISHING_PATH_PREFIX` only seed **new** teams; they are not platform runtime config.
+Optional env `PUBLISHING_BASE_DOMAIN` / `PUBLISHING_PATH_PREFIX` are unused for runtime; prefer project fields.
 
-Each project chooses **mode** and **host provider** in Dashboard → Projects:
+Each project also chooses **mode** and **host provider**:
 
 | Mode | Example public URL |
 |------|--------------------|
-| `path` | `https://your-site.vercel.app/s/acme` (prefix comes from team settings) |
+| `path` | `https://your-site.vercel.app/s/acme` (prefix comes from the project) |
 | `subdomain` | `https://acme.status.example.com` (CNAME to the provider; DNS is operator-owned) |
 
-Admin preview is always at `{ORIGIN}/s/{slug}` (platform-fixed path), independent of the team's publish path prefix.
+Admin preview is always at `{ORIGIN}/s/{slug}` (platform-fixed path), independent of the project's publish path prefix.
 
 ### One-click deploy credentials
 
@@ -97,7 +98,7 @@ Point a wildcard at your **static host** (or CDN), not the admin portal:
 *.status.example.com  →  provider (CNAME)
 ```
 
-Set the team's base domain in Dashboard → Settings → Publishing for URL hints. Keep `ORIGIN` on the admin apex.
+Set the project's base domain in Dashboard → Projects for URL hints. Keep `ORIGIN` on the admin apex.
 
 ### Local path-mode preview
 
@@ -140,7 +141,7 @@ App secrets in Infisical use path-based secrets where noted. The Postgres connec
 | Site description | `SITE_DESCRIPTION` |
 | Public base URL (API + admin) | `ORIGIN`, `BASE_URL`, `SITE_BASE_URL` |
 | Database URL | Infisical `/db/url`, or `DATABASE_URL` when Infisical is unset |
-| Publish base domain / path prefix | Team Settings (optional seed: `PUBLISHING_BASE_DOMAIN`, `PUBLISHING_PATH_PREFIX`) |
+| Publish base domain / path prefix | Per project (Dashboard → Projects) |
 | Credentials encryption key | `CREDENTIALS_ENCRYPTION_KEY` (optional; else derived from `AUTH_SECRET`) |
 | Mailgun API key / domain / from | Infisical `/mailgun` (`api_key`, `domain`, `from`), or `MAILGUN_*` when Infisical is unset |
 | Mailgun region | Infisical `/mailgun/region`, or `MAILGUN_REGION` (`us` \| `eu`) |
