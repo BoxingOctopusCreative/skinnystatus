@@ -3,6 +3,10 @@
 	import { Eye, Save } from 'lucide-svelte';
 	import {
 		formatPublishUrlHint,
+		SLUG_MAX_LENGTH,
+		SLUG_PATTERN,
+		SLUG_TITLE,
+		slugValidationMessage,
 		type HostProvider,
 		type PublishMode
 	} from '$lib/publishing';
@@ -71,6 +75,8 @@
 			apexDomain: draftBaseDomain
 		})
 	);
+
+	const slugError = $derived(slugValidationMessage(draftSlug.trim().toLowerCase()));
 </script>
 
 <div class="card preset-filled-surface-100-900 p-5 mb-5 border border-surface-200-800">
@@ -151,8 +157,14 @@
 						name="slug"
 						bind:value={draftSlug}
 						required
-						pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+						maxlength={SLUG_MAX_LENGTH}
+						pattern={SLUG_PATTERN}
+						title={SLUG_TITLE}
+						aria-invalid={slugError ? 'true' : undefined}
 					/>
+					{#if draftSlug && slugError}
+						<span class="text-error-500 text-xs mt-1">{slugError}</span>
+					{/if}
 				</label>
 				<label class="label">
 					<span class="label-text">Publish mode</span>

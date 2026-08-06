@@ -3,18 +3,16 @@ import { eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { assertCanCreateStatusPage, isLimitError } from '$lib/server/billing/limits';
 import { db, statusPage } from '$lib/server/db';
-import {
-	isValidSlug,
-	isPublishMode,
-	listServices,
-	toPageInfo
-} from '$lib/server/db/queries';
+import { isPublishMode, listServices, toPageInfo } from '$lib/server/db/queries';
 import { toPublicCheckSettings } from '$lib/server/checks';
 import { canonicalPageUrl, publishUrlHint } from '$lib/server/publishing';
-import { HOST_PROVIDERS, isHostProvider, PUBLISH_MODES } from '$lib/publishing';
 import {
+	HOST_PROVIDERS,
+	isHostProvider,
 	normalizePublishBaseDomain,
-	normalizePublishPathPrefix
+	normalizePublishPathPrefix,
+	PUBLISH_MODES,
+	slugValidationMessage
 } from '$lib/publishing';
 import type { PublicCheckSettings } from '$lib/checks';
 import {
@@ -138,10 +136,9 @@ export const actions: Actions = {
 		}
 
 		if (!name) return fail(400, { message: 'Name is required' });
-		if (!isValidSlug(slug)) {
-			return fail(400, {
-				message: 'Slug must be lowercase alphanumeric with optional hyphens'
-			});
+		{
+			const slugError = slugValidationMessage(slug);
+			if (slugError) return fail(400, { message: slugError });
 		}
 		if (!isPublishMode(publishMode)) return fail(400, { message: 'Invalid publish mode' });
 		if (!isHostProvider(hostProvider)) return fail(400, { message: 'Invalid host provider' });
@@ -206,10 +203,9 @@ export const actions: Actions = {
 		}
 
 		if (!id || !name) return fail(400, { message: 'ID and name are required' });
-		if (!isValidSlug(slug)) {
-			return fail(400, {
-				message: 'Slug must be lowercase alphanumeric with optional hyphens'
-			});
+		{
+			const slugError = slugValidationMessage(slug);
+			if (slugError) return fail(400, { message: slugError });
 		}
 		if (!isPublishMode(publishMode)) return fail(400, { message: 'Invalid publish mode' });
 		if (!isHostProvider(hostProvider)) return fail(400, { message: 'Invalid host provider' });

@@ -4,7 +4,15 @@
 	import { Settings } from 'lucide-svelte';
 	import ProjectCard from '$lib/components/ProjectCard.svelte';
 	import { checkTypeLabel, isCheckType, type PublicCheckSettings } from '$lib/checks';
-	import { formatPublishUrlHint, type HostProvider, type PublishMode } from '$lib/publishing';
+	import {
+		formatPublishUrlHint,
+		SLUG_MAX_LENGTH,
+		SLUG_PATTERN,
+		SLUG_TITLE,
+		slugValidationMessage,
+		type HostProvider,
+		type PublishMode
+	} from '$lib/publishing';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -38,6 +46,8 @@
 			apexDomain: createBaseDomain
 		})
 	);
+
+	const createSlugError = $derived(slugValidationMessage(createSlug.trim().toLowerCase()));
 
 	const selectedProject = $derived(
 		selectedProjectId
@@ -190,9 +200,15 @@
 						name="slug"
 						bind:value={createSlug}
 						required
-						pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+						maxlength={SLUG_MAX_LENGTH}
+						pattern={SLUG_PATTERN}
+						title={SLUG_TITLE}
 						placeholder="acme"
+						aria-invalid={createSlugError ? 'true' : undefined}
 					/>
+					{#if createSlug && createSlugError}
+						<span class="text-error-500 text-xs mt-1">{createSlugError}</span>
+					{/if}
 				</label>
 				<label class="label">
 					<span class="label-text">Publish mode</span>

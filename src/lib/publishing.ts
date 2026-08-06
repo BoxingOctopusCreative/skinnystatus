@@ -29,11 +29,39 @@ export function isPublishMode(value: string): value is PublishMode {
 	return (PUBLISH_MODES as readonly string[]).includes(value);
 }
 
+/** Max slug length (DNS label). Also keeps host-provider project names short. */
+export const SLUG_MAX_LENGTH = 63;
+
+/**
+ * HTML pattern: lowercase alnum + hyphens, no leading/trailing hyphen, no `--`.
+ * Aligns with host rules (Vercel rejects `---` / unsupported chars).
+ */
+export const SLUG_PATTERN = '(?!.*--)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?';
+
+export const SLUG_TITLE =
+	'Lowercase letters, digits, and hyphens only. No consecutive hyphens. Max 63 characters.';
+
 export function isValidSlug(slug: string): boolean {
-	// No consecutive hyphens: Vercel project names reject `---` and DNS labels dislike runs of `-`.
-	return (
-		/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(slug) && !slug.includes('--')
-	);
+	return slugValidationMessage(slug) === null;
+}
+
+/** Specific reason a slug is invalid, or null if ok. */
+export function slugValidationMessage(slug: string): string | null {
+	if (!slug) return 'Slug is required';
+	if (slug.length > SLUG_MAX_LENGTH) {
+		return `Slug can be up to ${SLUG_MAX_LENGTH} characters long`;
+	}
+	if (slug !== slug.toLowerCase()) return 'Slug must be lowercase';
+	if (!/^[a-z0-9-]+$/.test(slug)) {
+		return 'Slug can only include letters, digits, and hyphens';
+	}
+	if (slug.includes('--')) {
+		return 'Slug cannot contain consecutive hyphens';
+	}
+	if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)) {
+		return 'Slug must start and end with a letter or digit';
+	}
+	return null;
 }
 
 /** Platform-fixed path prefix for admin preview routes (`/s/{slug}`). */

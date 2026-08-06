@@ -34,32 +34,76 @@ async function vercelFetch(
 }
 
 /**
- * Vercel project names: lowercase; letters, digits, `.`, `_`, `-`; max 100;
- * cannot contain `---` (https://vercel.com/docs/projects/overview#project-name).
+ * Official Vercel project name rules:
+ * https://vercel.com/docs/project-configuration/general-settings#project-name
+ * lowercase; letters, digits, `.`, `_`, `-`; max 100; no `---`.
+ *
+ * We also keep names ≤40 so `{name}-{hash}-{team}.vercel.app` stays under
+ * the 63-character DNS label limit.
  */
+export const VERCEL_API_NAME_MAX = 100;
+export const VERCEL_PROJECT_NAME_MAX = 40;
+
+/** Allowed chars per Vercel (lowercase already required separately). */
+const VERCEL_NAME_CHARS = /^[a-z0-9._-]+$/;
+
+/**
+ * Returns an error message matching Vercel's rejection reasons, or null if valid.
+ * Enforces the API rules plus our shorter deploy length budget.
+ */
+export function vercelProjectNameError(name: string): string | null {
+	if (!name) {
+		return 'Project name is required';
+	}
+	if (name !== name.toLowerCase()) {
+		return 'Project names must be lowercase';
+	}
+	if (name.length > VERCEL_API_NAME_MAX) {
+		return `Project names can be up to ${VERCEL_API_NAME_MAX} characters long`;
+	}
+	if (name.length > VERCEL_PROJECT_NAME_MAX) {
+		return `Project names can be up to ${VERCEL_PROJECT_NAME_MAX} characters long`;
+	}
+	if (!VERCEL_NAME_CHARS.test(name)) {
+		return 'Project names can only include letters, digits, and the characters `.`, `_`, `-`';
+	}
+	if (name.includes('---')) {
+		return 'Project names cannot contain the sequence `---`';
+	}
+	return null;
+}
+
+export function assertValidVercelProjectName(name: string): void {
+	const error = vercelProjectNameError(name);
+	if (error) throw new Error(error);
+}
+
 export function sanitizeVercelProjectName(raw: string): string {
 	let name = raw
 		.toLowerCase()
 		.replace(/[^a-z0-9._-]+/g, '-')
 		.replace(/-{2,}/g, '-')
 		.replace(/^[-._]+|[-._]+$/g, '')
-		.slice(0, 100)
+		.slice(0, VERCEL_PROJECT_NAME_MAX)
 		.replace(/[-._]+$/g, '');
-	return name || 'skinnystatus';
+	name = name || 'ss';
+	assertValidVercelProjectName(name);
+	return name;
 }
 
 /**
- * Stable, always-valid project name from the status page id (UUID hex only).
- * Avoids slug edge cases (`---`, unicode, etc.) that Vercel rejects.
+ * Short, stable name from the status page id.
+ * `ss-` + 32 hex = 35 chars (fits `{name}-{hash}-{team}` under 63).
  */
 export function vercelProjectName(project: { id: string; slug?: string }): string {
 	const idHex = project.id.replace(/-/g, '').toLowerCase();
 	if (/^[a-f0-9]{32}$/.test(idHex)) {
-		return `skinnystatus-${idHex}`;
+		const name = `ss-${idHex}`;
+		assertValidVercelProjectName(name);
+		return name;
 	}
-	// Non-UUID ids (tests / legacy): fall back to sanitized slug or id.
 	const fallback = project.slug?.trim() || project.id;
-	return sanitizeVercelProjectName(`skinnystatus-${fallback}`);
+	return sanitizeVercelProjectName(`ss-${fallback}`);
 }
 
 function isVercelProjectId(value: string): boolean {
@@ -71,6 +115,7 @@ export const vercelAdapter: DeployAdapter = {
 	async deploy(input: DeployInput): Promise<DeployResult> {
 		const { token, teamId } = requireToken(input.credentials);
 		const name = vercelProjectName(input.project);
+		assertValidVercelProjectName(name);
 
 		const files = input.files.map((f) => ({
 			file: f.path.replace(/^\//, ''),
