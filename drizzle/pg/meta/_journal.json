@@ -71,6 +71,13 @@
       "when": 1785000000000,
       "tag": "0009_billing_orgs",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785100000000,
+      "tag": "0010_team_publish_settings",
+      "breakpoints": true
     }
   ]
 }

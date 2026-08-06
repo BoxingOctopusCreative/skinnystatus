@@ -11,7 +11,7 @@ import {
 } from '$lib/server/account-lifecycle';
 import { seedOnStartup } from '$lib/server/bootstrap';
 import { startChecker } from '$lib/server/checker';
-import { getConfig, initConfig } from '$lib/server/config';
+import { initConfig } from '$lib/server/config';
 import { ensureDatabaseMigrated } from '$lib/server/db/migrate';
 import { getStatusPageInfo } from '$lib/server/db/queries';
 import { db, user as userTable } from '$lib/server/db';
@@ -20,9 +20,9 @@ import { startPurgeJob } from '$lib/server/purge';
 import {
 	apexHost,
 	parsePathSlug,
-	parseSubdomainSlug,
 	stripPort
 } from '$lib/server/publishing';
+import { PLATFORM_PATH_PREFIX } from '$lib/publishing';
 
 let initialized = false;
 
@@ -80,21 +80,16 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 };
 
 const handleResolvePage: Handle = async ({ event, resolve }) => {
-	const config = getConfig();
 	const host = stripPort(event.request.headers.get('host') ?? event.url.host);
 	const apex = apexHost();
-	const baseDomain = config.publishing.baseDomain;
-	const pathPrefix = config.publishing.pathPrefix;
 
-	const subSlug = parseSubdomainSlug(host, baseDomain);
-	if (subSlug) {
-		const page = await getStatusPageInfo(subSlug, 'subdomain');
-		event.locals.statusPage = page;
-		return resolve(event);
-	}
-
-	const pathMatch = parsePathSlug(event.url.pathname, pathPrefix);
-	if (pathMatch && (host === apex || host === baseDomain || host === 'localhost' || host === '127.0.0.1')) {
+	// Admin preview only: platform-fixed `/s/{slug}` on the admin origin.
+	// Published pages live on each team's static host; subdomain CNAMEs do not hit this app.
+	const pathMatch = parsePathSlug(event.url.pathname, PLATFORM_PATH_PREFIX);
+	if (
+		pathMatch &&
+		(host === apex || host === 'localhost' || host === '127.0.0.1')
+	) {
 		const page = await getStatusPageInfo(pathMatch.slug, 'path');
 		event.locals.statusPage = page;
 		return resolve(event);

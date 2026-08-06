@@ -1,23 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { vercelProjectName } from './vercel';
+import { sanitizeVercelProjectName, vercelProjectName } from './vercel';
 
-describe('vercelProjectName', () => {
-	it('prefixes the slug', () => {
-		expect(vercelProjectName('acme')).toBe('skinnystatus-acme');
-	});
-
+describe('sanitizeVercelProjectName', () => {
 	it('collapses consecutive hyphens so names never contain ---', () => {
-		expect(vercelProjectName('john---doe')).toBe('skinnystatus-john-doe');
-		expect(vercelProjectName('a--b--c')).toBe('skinnystatus-a-b-c');
+		expect(sanitizeVercelProjectName('skinnystatus-john---doe')).toBe(
+			'skinnystatus-john-doe'
+		);
+		expect(sanitizeVercelProjectName('a--b--c')).toBe('a-b-c');
 	});
 
 	it('lowercases and strips invalid characters', () => {
-		expect(vercelProjectName('Acme Status!')).toBe('skinnystatus-acme-status');
+		expect(sanitizeVercelProjectName('Acme Status!')).toBe('acme-status');
+	});
+});
+
+describe('vercelProjectName', () => {
+	it('uses the status page UUID so the name is always valid', () => {
+		const id = '550e8400-e29b-41d4-a716-446655440000';
+		expect(vercelProjectName({ id, slug: 'john---doe' })).toBe(
+			'skinnystatus-550e8400e29b41d4a716446655440000'
+		);
 	});
 
-	it('stays within 100 characters', () => {
-		const long = 'a'.repeat(120);
-		expect(vercelProjectName(long).length).toBeLessThanOrEqual(100);
-		expect(vercelProjectName(long)).not.toMatch(/---/);
+	it('falls back to a sanitized slug when id is not a UUID', () => {
+		expect(vercelProjectName({ id: 'not-a-uuid', slug: 'a--b' })).toBe(
+			'skinnystatus-a-b'
+		);
+	});
+
+	it('stays within 100 characters and never contains ---', () => {
+		const name = vercelProjectName({
+			id: '550e8400-e29b-41d4-a716-446655440000',
+			slug: 'x'.repeat(120)
+		});
+		expect(name.length).toBeLessThanOrEqual(100);
+		expect(name).not.toMatch(/---/);
 	});
 });

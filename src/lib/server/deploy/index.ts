@@ -79,10 +79,10 @@ function configJs(project: StatusPageInfo, basePath: string): string {
  * Build deploy file list from the prebuilt template dist + injected config.js.
  * Path mode nests files under `{pathPrefix}/{slug}/` so a single provider site can host many pages.
  */
-export function prepareDeployFiles(project: StatusPageInfo): {
+export async function prepareDeployFiles(project: StatusPageInfo): Promise<{
 	files: DeployFile[];
 	basePath: string;
-} {
+}> {
 	const dist = distRoot();
 	if (!existsSync(join(dist, 'index.html'))) {
 		throw new Error(
@@ -90,11 +90,11 @@ export function prepareDeployFiles(project: StatusPageInfo): {
 		);
 	}
 
-	const config = getConfig();
+	const { getTeamPublishSettings } = await import('$lib/server/publishing');
+	const settings = await getTeamPublishSettings(project.teamId);
+	const pathPrefix = settings.publishPathPrefix || 's';
 	const basePath =
-		project.publishMode === 'path'
-			? `/${config.publishing.pathPrefix}/${project.slug}`
-			: '';
+		project.publishMode === 'path' ? `/${pathPrefix}/${project.slug}` : '';
 
 	const raw = walkFiles(dist);
 	const injected = raw.map((file) => {
@@ -144,7 +144,7 @@ export async function deployProject(
 	}
 
 	const credentials = await requireHostCredentials(project.teamId, provider);
-	const { files, basePath } = prepareDeployFiles(project);
+	const { files, basePath } = await prepareDeployFiles(project);
 	return adapter.deploy({
 		files,
 		project,

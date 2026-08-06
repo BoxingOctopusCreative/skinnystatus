@@ -21,7 +21,6 @@ import {
 } from '$lib/theme-config';
 import { deployProject } from '$lib/server/deploy';
 import { providerReadyMap } from '$lib/server/host-credentials';
-import { getConfig } from '$lib/server/config';
 import { resolveCurrentTeam } from '$lib/server/dashboard-page';
 import {
 	getAccessibleStatusPage,
@@ -41,25 +40,28 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 
 	const pages = await listStatusPagesForTeam(team.id);
 	const canManageLifecycle = roleAtLeast(team.role, 'admin');
-	const config = getConfig();
+	const pathPrefix = team.publishPathPrefix || 's';
+	const apexDomain = team.publishBaseDomain ?? '';
 
-	const projects = pages
-		.filter((p) => canManageLifecycle || p.deletedAt == null)
-		.map((p) => {
-			const info = toPageInfo(p);
-			return {
-				...info,
-				theme: parsePageTheme(p.themeJson),
-				url: info.deployUrl ?? canonicalPageUrl(info),
-				urlHint: publishUrlHint(info),
-				published: p.published,
-				deletedAt: p.deletedAt,
-				undeleteExpiresAt: p.deletedAt
-					? new Date(p.deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000)
-					: null,
-				canManageLifecycle
-			};
-		});
+	const projects = await Promise.all(
+		pages
+			.filter((p) => canManageLifecycle || p.deletedAt == null)
+			.map(async (p) => {
+				const info = toPageInfo(p);
+				return {
+					...info,
+					theme: parsePageTheme(p.themeJson),
+					url: info.deployUrl ?? (await canonicalPageUrl(info)),
+					urlHint: await publishUrlHint(info),
+					published: p.published,
+					deletedAt: p.deletedAt,
+					undeleteExpiresAt: p.deletedAt
+						? new Date(p.deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000)
+						: null,
+					canManageLifecycle
+				};
+			})
+	);
 
 	const servicesByProjectId: Record<
 		string,
@@ -96,8 +98,8 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 		canManageLifecycle,
 		modes: PUBLISH_MODES,
 		providers: HOST_PROVIDERS,
-		pathPrefix: config.publishing.pathPrefix,
-		apexDomain: config.publishing.baseDomain,
+		pathPrefix,
+		apexDomain,
 		defaultTheme: DEFAULT_PAGE_THEME,
 		providerReady: await providerReadyMap(team.id)
 	};

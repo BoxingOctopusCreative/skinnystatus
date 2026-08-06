@@ -407,6 +407,10 @@ export const team = pgTable(
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' }),
 		bannerImage: text('banner_image'),
+		/** Apex host for subdomain publish URL hints (no scheme). Null until set in Settings. */
+		publishBaseDomain: text('publish_base_domain'),
+		/** Path segment for path-mode deploy nesting and URL hints. */
+		publishPathPrefix: text('publish_path_prefix').notNull().default('s'),
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true })
 			.defaultNow()

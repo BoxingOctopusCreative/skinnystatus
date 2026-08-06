@@ -77,7 +77,7 @@ function unsubscribeUrl(token: string): string {
 	return `${base}/api/v1/unsubscribe?token=${encodeURIComponent(token)}`;
 }
 
-function pagePublicUrl(page: {
+async function pagePublicUrl(page: {
 	slug: string;
 	publishMode: string;
 	deployUrl: string | null;
@@ -86,9 +86,10 @@ function pagePublicUrl(page: {
 	name: string;
 	description: string | null;
 	id: string;
-}): string {
+	teamId?: string | null;
+}): Promise<string> {
 	const info = pageInfoFromRow(page);
-	return info.deployUrl ?? canonicalPageUrl(info);
+	return info.deployUrl ?? (await canonicalPageUrl(info));
 }
 
 export async function sendWelcomeEmail(
@@ -137,7 +138,7 @@ export async function notifyIncidentAlert(input: {
 	const subs = await listSubscribers(input.statusPageId);
 	if (subs.length === 0) return;
 
-	const pageUrl = pagePublicUrl(page);
+	const pageUrl = await pagePublicUrl(page);
 	const verb = input.kind === 'created' ? 'New incident' : 'Incident update';
 	const subject = `[${page.name}] ${verb}: ${input.incidentTitle}`;
 

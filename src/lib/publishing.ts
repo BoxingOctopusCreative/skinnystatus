@@ -32,6 +32,40 @@ export function isValidSlug(slug: string): boolean {
 	);
 }
 
+/** Platform-fixed path prefix for admin preview routes (`/s/{slug}`). */
+export const PLATFORM_PATH_PREFIX = 's';
+
+/** Team path prefix for static-host nesting and URL hints. */
+export function isValidPublishPathPrefix(value: string): boolean {
+	return /^[a-z0-9]([a-z0-9-]{0,31}[a-z0-9])?$/.test(value) && !value.includes('--');
+}
+
+/**
+ * Hostname only (no scheme, port, path). Empty string is allowed (means unset).
+ * Examples: `status.acme.com`, `localhost`
+ */
+export function normalizePublishBaseDomain(raw: string): string | null {
+	const trimmed = raw.trim().toLowerCase();
+	if (!trimmed) return null;
+	const withoutScheme = trimmed.replace(/^https?:\/\//, '');
+	const host = withoutScheme.split('/')[0]?.split(':')[0] ?? '';
+	if (!host) return null;
+	if (!/^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/.test(host) || host.includes('..')) {
+		throw new Error('Base domain must be a hostname (no scheme, port, or path)');
+	}
+	return host;
+}
+
+export function normalizePublishPathPrefix(raw: string): string {
+	const value = raw.trim().toLowerCase().replace(/^\/+|\/+$/g, '');
+	if (!isValidPublishPathPrefix(value)) {
+		throw new Error(
+			'Path prefix must be lowercase alphanumeric with optional hyphens (1–33 chars)'
+		);
+	}
+	return value;
+}
+
 /** Client-safe URL hint from publish mode + host provider (no server config). */
 export function formatPublishUrlHint(opts: {
 	slug: string;
@@ -43,7 +77,8 @@ export function formatPublishUrlHint(opts: {
 	const slug = opts.slug.trim() || '<slug>';
 	const prefix = opts.pathPrefix.replace(/^\/+|\/+$/g, '') || 's';
 	if (opts.publishMode === 'subdomain') {
-		return `https://${slug}.${opts.apexDomain}`;
+		const apex = opts.apexDomain.trim() || '<base-domain>';
+		return `https://${slug}.${apex}`;
 	}
 	switch (opts.hostProvider) {
 		case 'cloudflare_pages':
@@ -62,7 +97,7 @@ export function formatPublishUrlHint(opts: {
 			return `https://<app>.azurestaticapps.net/${prefix}/${slug}`;
 		case 'vercel':
 		default:
-			return `https://skinnystatus-${slug}.vercel.app/${prefix}/${slug}`;
+			return `https://<project>.vercel.app/${prefix}/${slug}`;
 	}
 }
 

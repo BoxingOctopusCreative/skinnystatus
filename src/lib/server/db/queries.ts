@@ -503,10 +503,12 @@ export async function getUserByEmail(
 
 export async function listPublicPages() {
 	const pages = await listStatusPages();
-	return pages.map((p) => {
-		const info = toPageInfo(p);
-		return { ...info, url: info.deployUrl ?? canonicalPageUrl(info) };
-	});
+	return Promise.all(
+		pages.map(async (p) => {
+			const info = toPageInfo(p);
+			return { ...info, url: info.deployUrl ?? (await canonicalPageUrl(info)) };
+		})
+	);
 }
 
 export { and, eq, ne, desc, gte, isValidSlug, isPublishMode, toPageInfo };

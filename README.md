@@ -46,21 +46,23 @@ Set `ORIGIN` to the admin portal’s public URL so deployed status pages know wh
 
 ## Publishing
 
-Instance config (env / Infisical):
+Each **team** sets publish settings under **Dashboard → Settings → Publishing**:
 
-| Setting | Env |
-|---------|-----|
-| Apex / subdomain parent | `PUBLISHING_BASE_DOMAIN` or `PUBLISHING_APEX_DOMAIN` |
-| Path prefix | `PUBLISHING_PATH_PREFIX` (default `s`) |
+| Setting | Meaning |
+|---------|---------|
+| Base domain | Apex for subdomain URL hints / DNS copy (`{slug}.your.domain`) |
+| Path prefix | Path segment for path-mode deploy nesting (`/{prefix}/{slug}/` on the static host) |
+
+Optional env `PUBLISHING_BASE_DOMAIN` / `PUBLISHING_PATH_PREFIX` only seed **new** teams; they are not platform runtime config.
 
 Each project chooses **mode** and **host provider** in Dashboard → Projects:
 
 | Mode | Example public URL |
 |------|--------------------|
-| `path` | `https://your-site.vercel.app/s/acme` (or other provider base + path) |
+| `path` | `https://your-site.vercel.app/s/acme` (prefix comes from team settings) |
 | `subdomain` | `https://acme.status.example.com` (CNAME to the provider; DNS is operator-owned) |
 
-Admin can still preview boards at `{ORIGIN}/{path_prefix}/{slug}` while you iterate.
+Admin preview is always at `{ORIGIN}/s/{slug}` (platform-fixed path), independent of the team's publish path prefix.
 
 ### One-click deploy credentials
 
@@ -89,17 +91,17 @@ Deploy builds from the prebuilt template (`npm run build:status-template`), inje
 
 ### DNS for subdomains
 
-Point a wildcard at your **static host** (or CDN), not necessarily the admin portal:
+Point a wildcard at your **static host** (or CDN), not the admin portal:
 
 ```
 *.status.example.com  →  provider (CNAME)
 ```
 
-Set `PUBLISHING_BASE_DOMAIN=status.example.com` for URL hints. Keep `ORIGIN` on the admin apex.
+Set the team's base domain in Dashboard → Settings → Publishing for URL hints. Keep `ORIGIN` on the admin apex.
 
 ### Local path-mode preview
 
-With defaults (`path_prefix=s`, seeded `default` project):
+Admin preview (platform path `s`):
 
 [http://localhost:5173/s/default](http://localhost:5173/s/default)
 
@@ -138,8 +140,7 @@ App secrets in Infisical use path-based secrets where noted. The Postgres connec
 | Site description | `SITE_DESCRIPTION` |
 | Public base URL (API + admin) | `ORIGIN`, `BASE_URL`, `SITE_BASE_URL` |
 | Database URL | Infisical `/db/url`, or `DATABASE_URL` when Infisical is unset |
-| Publish apex / base domain | `PUBLISHING_BASE_DOMAIN`, `PUBLISHING_APEX_DOMAIN` |
-| Publish path prefix | `PUBLISHING_PATH_PREFIX` |
+| Publish base domain / path prefix | Team Settings (optional seed: `PUBLISHING_BASE_DOMAIN`, `PUBLISHING_PATH_PREFIX`) |
 | Credentials encryption key | `CREDENTIALS_ENCRYPTION_KEY` (optional; else derived from `AUTH_SECRET`) |
 | Mailgun API key / domain / from | Infisical `/mailgun` (`api_key`, `domain`, `from`), or `MAILGUN_*` when Infisical is unset |
 | Mailgun region | Infisical `/mailgun/region`, or `MAILGUN_REGION` (`us` \| `eu`) |

@@ -84,11 +84,6 @@ export type AppConfig = {
 	database: {
 		url: string;
 	};
-	publishing: {
-		/** Apex / subdomain parent host (no scheme). */
-		baseDomain: string;
-		pathPrefix: string;
-	};
 	providers: ProviderConfig;
 	checks: {
 		intervalSeconds: number;
@@ -134,10 +129,6 @@ const DEFAULTS: AppConfig = {
 	},
 	database: {
 		url: 'postgresql://skinnystatus:skinnystatus@localhost:5432/skinnystatus'
-	},
-	publishing: {
-		baseDomain: 'localhost',
-		pathPrefix: 's'
 	},
 	providers: {
 		vercel: { token: null, teamId: null },
@@ -631,9 +622,6 @@ async function loadSentryFromInfisical(
 }
 
 function buildConfig(): AppConfig {
-	const baseDomainRaw =
-		firstEnv('PUBLISHING_BASE_DOMAIN', 'PUBLISHING_APEX_DOMAIN') ?? DEFAULTS.publishing.baseDomain;
-
 	const databaseUrl = requirePostgresUrl(
 		firstEnv('DATABASE_URL') ?? DEFAULTS.database.url
 	);
@@ -647,16 +635,6 @@ function buildConfig(): AppConfig {
 		},
 		database: {
 			url: databaseUrl
-		},
-		publishing: {
-			baseDomain: baseDomainRaw
-				.replace(/^https?:\/\//, '')
-				.replace(/\/$/, '')
-				.toLowerCase(),
-			pathPrefix: (firstEnv('PUBLISHING_PATH_PREFIX') ?? DEFAULTS.publishing.pathPrefix).replace(
-				/^\/+|\/+$/g,
-				''
-			)
 		},
 		providers: {
 			vercel: {

@@ -153,6 +153,14 @@
 	</p>
 </div>
 
+{#if !data.apexDomain}
+	<p class="text-sm text-surface-500 mb-3">
+		No publish base domain set.
+		<a href="/dashboard/settings?team={data.team.id}">Set it in Settings → Publishing</a>
+		for subdomain DNS hints.
+	</p>
+{/if}
+
 {#if form?.message}
 	<p class="text-error-500 text-sm mb-3">
 		{form.message}

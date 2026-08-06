@@ -117,6 +117,57 @@
 
 {#if data.canManage}
 	<div class="mb-8">
+		<h2 class="text-lg font-semibold mb-3">Publishing</h2>
+		<p class="text-sm text-surface-500 mb-3">
+			Used for deploy path nesting and public URL hints. DNS for custom domains still points at
+			your static host (Vercel, Cloudflare, and so on), not this admin app.
+		</p>
+		<form method="post" action="?/savePublishing" use:enhance class="flex flex-col gap-3 max-w-xl">
+			<label class="label">
+				<span class="label-text">Base domain</span>
+				<input
+					class="input"
+					name="publishBaseDomain"
+					placeholder="status.example.com"
+					autocomplete="off"
+					value={data.publishBaseDomain}
+				/>
+				<span class="text-xs text-surface-500 mt-1">
+					For subdomain mode: CNAME <code>{'<slug>'}.{data.publishBaseDomain || 'your.domain'}</code> →
+					your host. Leave blank until you have a domain.
+				</span>
+			</label>
+			<label class="label">
+				<span class="label-text">Path prefix</span>
+				<input
+					class="input"
+					name="publishPathPrefix"
+					required
+					autocomplete="off"
+					value={data.publishPathPrefix}
+				/>
+				<span class="text-xs text-surface-500 mt-1">
+					Path-mode deploys nest under <code>/{data.publishPathPrefix || 's'}/{'<slug>'}</code> on your
+					host.
+				</span>
+			</label>
+			<button type="submit" class="btn preset-filled-primary-500 w-fit">Save publishing</button>
+		</form>
+	</div>
+{:else}
+	<div class="mb-8">
+		<h2 class="text-lg font-semibold mb-3">Publishing</h2>
+		<p class="text-sm text-surface-500 mb-1">
+			Base domain: <code>{data.publishBaseDomain || '(not set)'}</code>
+		</p>
+		<p class="text-sm text-surface-500">
+			Path prefix: <code>/{data.publishPathPrefix}</code>
+		</p>
+	</div>
+{/if}
+
+{#if data.canManage}
+	<div class="mb-8">
 		<h2 class="text-lg font-semibold mb-3">Hero banner</h2>
 		<p class="text-sm text-surface-500 mb-3">
 			Wide image shown at the top of the team landing page on the dashboard. You'll crop it after

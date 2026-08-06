@@ -36,7 +36,7 @@ export const load: PageServerLoad = async ({ url, locals, cookies }) => {
 		pageId,
 		team,
 		teams,
-		pageUrl: canonicalPageUrl(info),
+		pageUrl: await canonicalPageUrl(info),
 		incidentPathPrefix: info.publishMode === 'path' ? `/s/${info.slug}` : '',
 		incidents: withUpdates,
 		services,

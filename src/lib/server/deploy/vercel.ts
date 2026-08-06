@@ -37,8 +37,8 @@ async function vercelFetch(
  * Vercel project names: lowercase; letters, digits, `.`, `_`, `-`; max 100;
  * cannot contain `---` (https://vercel.com/docs/projects/overview#project-name).
  */
-export function vercelProjectName(slug: string): string {
-	let name = `skinnystatus-${slug}`
+export function sanitizeVercelProjectName(raw: string): string {
+	let name = raw
 		.toLowerCase()
 		.replace(/[^a-z0-9._-]+/g, '-')
 		.replace(/-{2,}/g, '-')
@@ -48,11 +48,29 @@ export function vercelProjectName(slug: string): string {
 	return name || 'skinnystatus';
 }
 
+/**
+ * Stable, always-valid project name from the status page id (UUID hex only).
+ * Avoids slug edge cases (`---`, unicode, etc.) that Vercel rejects.
+ */
+export function vercelProjectName(project: { id: string; slug?: string }): string {
+	const idHex = project.id.replace(/-/g, '').toLowerCase();
+	if (/^[a-f0-9]{32}$/.test(idHex)) {
+		return `skinnystatus-${idHex}`;
+	}
+	// Non-UUID ids (tests / legacy): fall back to sanitized slug or id.
+	const fallback = project.slug?.trim() || project.id;
+	return sanitizeVercelProjectName(`skinnystatus-${fallback}`);
+}
+
+function isVercelProjectId(value: string): boolean {
+	return /^prj_[A-Za-z0-9]+$/.test(value);
+}
+
 export const vercelAdapter: DeployAdapter = {
 	provider: 'vercel',
 	async deploy(input: DeployInput): Promise<DeployResult> {
 		const { token, teamId } = requireToken(input.credentials);
-		const name = vercelProjectName(input.project.slug);
+		const name = vercelProjectName(input.project);
 
 		const files = input.files.map((f) => ({
 			file: f.path.replace(/^\//, ''),
@@ -68,7 +86,9 @@ export const vercelAdapter: DeployAdapter = {
 			}
 		};
 
-		if (input.providerId) {
+		// `project` overrides `name`. Only pass Vercel project ids.
+		// Legacy rows may store a slug-based name (possibly with `---`) here.
+		if (input.providerId && isVercelProjectId(input.providerId)) {
 			body.project = input.providerId;
 		}
 
@@ -80,7 +100,11 @@ export const vercelAdapter: DeployAdapter = {
 
 		if (!res.ok) {
 			const text = await res.text();
-			throw new Error(`Vercel deploy failed (${res.status}): ${text.slice(0, 400)}`);
+			const projectRef =
+				typeof body.project === 'string' ? ` project=${body.project}` : ' project=(none)';
+			throw new Error(
+				`Vercel deploy failed (${res.status}) name=${name}${projectRef}: ${text.slice(0, 400)}`
+			);
 		}
 
 		const data = (await res.json()) as {
@@ -100,7 +124,9 @@ export const vercelAdapter: DeployAdapter = {
 
 		return {
 			url,
-			providerId: data.projectId ?? input.providerId ?? name
+			providerId: data.projectId ?? (input.providerId && isVercelProjectId(input.providerId)
+				? input.providerId
+				: name)
 		};
 	}
 };

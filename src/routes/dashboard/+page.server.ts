@@ -23,19 +23,21 @@ export const load: PageServerLoad = async ({ url, locals, cookies }) => {
 	const bannerUrl = await resolveImageUrl(team.bannerImage);
 	const pages = await listStatusPagesForTeam(team.id);
 
-	const projects = pages
-		.filter((p) => canManage || p.deletedAt == null)
-		.map((p) => {
-			const info = toPageInfo(p);
-			return {
-				...info,
-				theme: parsePageTheme(p.themeJson),
-				url: info.deployUrl ?? canonicalPageUrl(info),
-				urlHint: publishUrlHint(info),
-				published: p.published,
-				deletedAt: p.deletedAt
-			};
-		});
+	const projects = await Promise.all(
+		pages
+			.filter((p) => canManage || p.deletedAt == null)
+			.map(async (p) => {
+				const info = toPageInfo(p);
+				return {
+					...info,
+					theme: parsePageTheme(p.themeJson),
+					url: info.deployUrl ?? (await canonicalPageUrl(info)),
+					urlHint: await publishUrlHint(info),
+					published: p.published,
+					deletedAt: p.deletedAt
+				};
+			})
+	);
 
 	return {
 		team,

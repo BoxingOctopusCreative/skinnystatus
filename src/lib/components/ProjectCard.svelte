@@ -24,6 +24,7 @@
 			description: string | null;
 			publishMode: PublishMode;
 			hostProvider: HostProvider;
+			teamId: string;
 			theme: PageTheme;
 			deployUrl: string | null;
 			lastDeployError: string | null;
@@ -107,9 +108,17 @@
 			</p>
 		{/if}
 		{#if draftMode === 'subdomain'}
-			<p class="text-sm text-surface-500">
-				DNS: CNAME <code>{draftSlug || '<slug>'}.{apexDomain}</code> → your host provider
-			</p>
+			{#if apexDomain}
+				<p class="text-sm text-surface-500">
+					DNS: CNAME <code>{draftSlug || '<slug>'}.{apexDomain}</code> → your host provider
+				</p>
+			{:else}
+				<p class="text-warning-500 text-sm">
+					Set a base domain under
+					<a href="/dashboard/settings?team={project.teamId}">Settings → Publishing</a>
+					for subdomain DNS hints.
+				</p>
+			{/if}
 		{:else}
 			<p class="text-sm text-surface-500">
 				Path base: <code>/{pathPrefix}/{draftSlug || '<slug>'}</code>

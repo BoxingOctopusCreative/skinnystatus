@@ -1,8 +1,12 @@
 import * as Sentry from '@sentry/sveltekit';
 import { initConfig } from '$lib/server/config';
+import { ensureDatabaseMigrated } from '$lib/server/db/migrate';
 
 // Infisical (and .env) must load before Sentry.init so /sentry secrets are available.
 await initConfig();
+
+// Apply pending SQL migrations before the server handles traffic.
+await ensureDatabaseMigrated();
 
 const dsn = process.env.SENTRY_DSN ?? process.env.PUBLIC_SENTRY_DSN;
 

@@ -24,6 +24,7 @@ import {
 	revokeInvite,
 	roleAtLeast,
 	setMemberRole,
+	updateTeamPublishing,
 	userCanManageTeam
 } from '$lib/server/teams';
 import {
@@ -78,6 +79,8 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 		invites,
 		inviteLink: url.searchParams.get('inviteLink'),
 		inviteEmailSent: url.searchParams.get('email') === '1',
+		publishBaseDomain: team.publishBaseDomain ?? '',
+		publishPathPrefix: team.publishPathPrefix || 's',
 		providers: HOST_PROVIDERS,
 		providerReady,
 		credentials
@@ -85,6 +88,29 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 };
 
 export const actions: Actions = {
+	savePublishing: async ({ request, locals, url, cookies }) => {
+		if (!locals.user) return fail(401, { message: 'Unauthorized' });
+		const { team } = await resolveCurrentTeam(url, locals.user.id, cookies, {
+			email: locals.user.email,
+			name: locals.user.name
+		});
+		if (!roleAtLeast(team.role, 'admin')) {
+			return fail(403, { message: 'Only team owners and admins can edit publishing settings' });
+		}
+
+		const form = await request.formData();
+		const publishBaseDomain = form.get('publishBaseDomain')?.toString() ?? '';
+		const publishPathPrefix = form.get('publishPathPrefix')?.toString() ?? 's';
+
+		try {
+			await updateTeamPublishing(team.id, { publishBaseDomain, publishPathPrefix });
+			return { success: true, publishing: true };
+		} catch (e) {
+			const message = e instanceof Error ? e.message : 'Could not save publishing settings';
+			return fail(400, { message });
+		}
+	},
+
 	save: async ({ request, locals, url, cookies }) => {
 		if (!locals.user) return fail(401, { message: 'Unauthorized' });
 		const { team } = await resolveCurrentTeam(url, locals.user.id, cookies, {
