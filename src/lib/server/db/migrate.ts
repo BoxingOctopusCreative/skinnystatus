@@ -34,8 +34,10 @@ async function ensureMigrationsTable(sql: Sql): Promise<void> {
 }
 
 async function appliedHashes(sql: Sql): Promise<Set<string>> {
-	const rows = await sql.unsafe(`SELECT hash FROM ${MIGRATIONS_TABLE}`);
-	return new Set(rows.map((row: { hash: string }) => String(row.hash)));
+	const rows: Array<{ hash: string }> = await sql.unsafe(
+		`SELECT hash FROM ${MIGRATIONS_TABLE}`
+	);
+	return new Set(rows.map((row) => String(row.hash)));
 }
 
 async function columnExists(sql: Sql, table: string, column: string): Promise<boolean> {
