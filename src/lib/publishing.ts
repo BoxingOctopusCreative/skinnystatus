@@ -98,6 +98,74 @@ export function normalizePublishPathPrefix(raw: string): string {
 	return value;
 }
 
+/**
+ * Hostname registered with the static host in subdomain publish mode.
+ * Example: slug `acme`, base `status.example.com` → `acme.status.example.com`.
+ */
+export function subdomainHostname(slug: string, publishBaseDomain: string): string {
+	const s = slug.trim().toLowerCase();
+	const apex = publishBaseDomain.trim().toLowerCase();
+	if (!s || !apex) {
+		throw new Error('Slug and base domain are required for a custom hostname');
+	}
+	return `${s}.${apex}`;
+}
+
+/**
+ * Default CNAME target for DNS hints (before/after deploy).
+ * Prefer `cnameTargetForProvider` when `deployProviderId` / owner is known.
+ */
+export function defaultCnameTarget(provider: HostProvider | string): string {
+	switch (provider) {
+		case 'vercel':
+			return 'cname.vercel-dns.com';
+		case 'cloudflare_pages':
+			return '<project>.pages.dev';
+		case 'netlify':
+			return '<site>.netlify.app';
+		case 'github_pages':
+			return '<owner>.github.io';
+		case 'firebase_hosting':
+			return '<site-id>.web.app';
+		default:
+			return 'your host provider';
+	}
+}
+
+/** Resolve a concrete CNAME target when provider ids are known. */
+export function cnameTargetForProvider(
+	provider: HostProvider | string,
+	opts: {
+		deployProviderId?: string | null;
+		deployUrl?: string | null;
+	} = {}
+): string {
+	const id = opts.deployProviderId?.trim() || '';
+	switch (provider) {
+		case 'vercel':
+			return 'cname.vercel-dns.com';
+		case 'cloudflare_pages':
+			return id ? `${id}.pages.dev` : defaultCnameTarget(provider);
+		case 'netlify': {
+			if (opts.deployUrl) {
+				try {
+					const host = new URL(opts.deployUrl).hostname.toLowerCase();
+					if (host.endsWith('.netlify.app')) return host;
+				} catch {
+					/* ignore */
+				}
+			}
+			return defaultCnameTarget(provider);
+		}
+		case 'github_pages': {
+			const owner = id.includes('/') ? id.split('/')[0] : '';
+			return owner ? `${owner}.github.io` : defaultCnameTarget(provider);
+		}
+		default:
+			return defaultCnameTarget(provider);
+	}
+}
+
 /** Client-safe URL hint from publish mode + host provider (no server config). */
 export function formatPublishUrlHint(opts: {
 	slug: string;

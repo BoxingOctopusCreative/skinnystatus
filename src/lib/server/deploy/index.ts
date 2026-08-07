@@ -3,10 +3,14 @@ import { join, relative, resolve } from 'node:path';
 import { getConfig } from '$lib/server/config';
 import { requireHostCredentials } from '$lib/server/host-credentials';
 import type { HostProvider, StatusPageInfo } from '$lib/publishing';
-import { isHostProvider } from '$lib/publishing';
+import { cnameTargetForProvider, isHostProvider } from '$lib/publishing';
 import type { DeployFile } from './types';
 import { azureSwaAdapter } from './azure-swa';
 import { cloudflarePagesAdapter } from './cloudflare';
+import {
+	domainRegisterInputForProject,
+	registerCustomDomain
+} from './domains';
 import { firebaseHostingAdapter } from './firebase';
 import { githubPagesAdapter } from './github-pages';
 import { netlifyAdapter } from './netlify';
@@ -143,7 +147,7 @@ export async function deployProject(
 
 	const credentials = await requireHostCredentials(project.teamId, provider);
 	const { files, basePath } = await prepareDeployFiles(project);
-	return adapter.deploy({
+	const result = await adapter.deploy({
 		files,
 		project,
 		mode: project.publishMode,
@@ -151,6 +155,40 @@ export async function deployProject(
 		providerId: project.deployProviderId,
 		credentials
 	});
+
+	const domainInput = domainRegisterInputForProject(project, result, credentials);
+	if (!domainInput) return result;
+
+	try {
+		const registered = await registerCustomDomain(domainInput);
+		if (!registered) return result;
+		return {
+			...result,
+			url: registered.verified ? `https://${registered.hostname}` : result.url,
+			customDomain: {
+				hostname: registered.hostname,
+				registered: true,
+				verified: registered.verified,
+				cnameTarget: registered.cnameTarget
+			}
+		};
+	} catch (e) {
+		const warning =
+			e instanceof Error ? e.message : 'Custom domain registration failed';
+		return {
+			...result,
+			customDomain: {
+				hostname: domainInput.hostname,
+				registered: false,
+				verified: false,
+				cnameTarget: cnameTargetForProvider(provider, {
+					deployProviderId: result.providerId,
+					deployUrl: result.url
+				}),
+				warning
+			}
+		};
+	}
 }
 
 export function copyTemplateDistTo(target: string): void {

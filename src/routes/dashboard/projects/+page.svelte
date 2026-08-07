@@ -192,6 +192,23 @@
 		Deployed to <a href={form.deployedUrl}>{form.deployedUrl}</a>
 	</p>
 {/if}
+{#if form && 'customDomain' in form && form.customDomain}
+	{#if form.customDomain.warning}
+		<p class="text-warning-500 text-sm mb-3">
+			Deploy succeeded, but custom domain registration failed:
+			{form.customDomain.warning}
+		</p>
+	{:else if form.customDomain.registered}
+		<p class="text-success-500 text-sm mb-3">
+			Custom domain <code>{form.customDomain.hostname}</code> registered
+			{#if form.customDomain.verified}
+				and verified
+			{:else if form.customDomain.cnameTarget}
+				. Point a CNAME to <code>{form.customDomain.cnameTarget}</code> to finish DNS.
+			{/if}
+		</p>
+	{/if}
+{/if}
 
 {#if data.canManageLifecycle}
 	<details class="create-project-pull border-b border-surface-200-800 py-3 mt-5 mb-5">

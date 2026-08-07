@@ -19,9 +19,19 @@ export type DeployInput = {
 	credentials: HostCredentials;
 };
 
+export type CustomDomainResult = {
+	hostname: string;
+	registered: boolean;
+	verified: boolean;
+	cnameTarget: string;
+	/** Soft failure after a successful file deploy */
+	warning?: string;
+};
+
 export type DeployResult = {
 	url: string;
 	providerId: string;
+	customDomain?: CustomDomainResult;
 };
 
 export type DeployAdapter = {

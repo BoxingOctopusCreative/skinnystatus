@@ -359,7 +359,19 @@ export const actions: Actions = {
 					updatedAt: new Date()
 				})
 				.where(eq(statusPage.id, id));
-			return { success: true, deployedUrl: result.url };
+			return {
+				success: true,
+				deployedUrl: result.url,
+				customDomain: result.customDomain
+					? {
+							hostname: result.customDomain.hostname,
+							registered: result.customDomain.registered,
+							verified: result.customDomain.verified,
+							cnameTarget: result.customDomain.cnameTarget,
+							warning: result.customDomain.warning
+						}
+					: undefined
+			};
 		} catch (e) {
 			const message = e instanceof Error ? e.message : 'Deploy failed';
 			await db

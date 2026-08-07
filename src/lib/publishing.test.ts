@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
 	isValidPublishPathPrefix,
 	isValidSlug,
+	cnameTargetForProvider,
+	defaultCnameTarget,
 	normalizePublishBaseDomain,
 	normalizePublishPathPrefix,
-	slugValidationMessage
+	slugValidationMessage,
+	subdomainHostname
 } from '$lib/publishing';
 
 describe('slug validation', () => {
@@ -48,5 +51,44 @@ describe('publish base domain', () => {
 	it('rejects junk and strips paths to the host', () => {
 		expect(normalizePublishBaseDomain('example.com/foo')).toBe('example.com');
 		expect(() => normalizePublishBaseDomain('not a domain')).toThrow(/hostname/);
+	});
+});
+
+describe('subdomainHostname', () => {
+	it('joins slug and apex', () => {
+		expect(subdomainHostname('acme', 'status.example.com')).toBe('acme.status.example.com');
+	});
+
+	it('rejects empty parts', () => {
+		expect(() => subdomainHostname('', 'example.com')).toThrow(/required/);
+		expect(() => subdomainHostname('acme', '')).toThrow(/required/);
+	});
+});
+
+describe('cname targets', () => {
+	it('returns provider defaults', () => {
+		expect(defaultCnameTarget('vercel')).toBe('cname.vercel-dns.com');
+		expect(defaultCnameTarget('cloudflare_pages')).toBe('<project>.pages.dev');
+		expect(defaultCnameTarget('netlify')).toBe('<site>.netlify.app');
+		expect(defaultCnameTarget('github_pages')).toBe('<owner>.github.io');
+	});
+
+	it('resolves concrete targets when ids are known', () => {
+		expect(
+			cnameTargetForProvider('cloudflare_pages', {
+				deployProviderId: 'skinnystatus-acme'
+			})
+		).toBe('skinnystatus-acme.pages.dev');
+		expect(
+			cnameTargetForProvider('netlify', {
+				deployUrl: 'https://skinnystatus-acme.netlify.app/'
+			})
+		).toBe('skinnystatus-acme.netlify.app');
+		expect(
+			cnameTargetForProvider('github_pages', {
+				deployProviderId: 'acme-org/skinnystatus-status'
+			})
+		).toBe('acme-org.github.io');
+		expect(cnameTargetForProvider('vercel', {})).toBe('cname.vercel-dns.com');
 	});
 });

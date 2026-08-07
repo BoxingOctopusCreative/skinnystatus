@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { Eye, Save } from 'lucide-svelte';
 	import {
+		cnameTargetForProvider,
 		formatPublishUrlHint,
 		SLUG_MAX_LENGTH,
 		SLUG_PATTERN,
@@ -32,6 +33,7 @@
 			teamId: string;
 			theme: PageTheme;
 			deployUrl: string | null;
+			deployProviderId: string | null;
 			lastDeployError: string | null;
 			lastDeployedAt: Date | string | null;
 			published: boolean;
@@ -74,6 +76,14 @@
 			hostProvider: draftProvider,
 			pathPrefix: draftPathPrefix,
 			apexDomain: draftBaseDomain
+		})
+	);
+
+	const cnameTarget = $derived(
+		cnameTargetForProvider(draftProvider, {
+			deployProviderId:
+				draftProvider === project.hostProvider ? project.deployProviderId : null,
+			deployUrl: draftProvider === project.hostProvider ? project.deployUrl : null
 		})
 	);
 
@@ -135,7 +145,8 @@
 		{#if draftMode === 'subdomain'}
 			{#if draftBaseDomain}
 				<p class="text-sm text-surface-500">
-					DNS: CNAME <code>{draftSlug || '<slug>'}.{draftBaseDomain}</code> → your host provider
+					DNS: CNAME <code>{draftSlug || '<slug>'}.{draftBaseDomain}</code> →
+					<code>{cnameTarget}</code>
 				</p>
 			{:else}
 				<p class="text-warning-500 text-sm">
