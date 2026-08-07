@@ -10,6 +10,7 @@
 		type HostProvider,
 		type PublishMode
 	} from '$lib/publishing';
+	import { formatPurgeCountdown } from '$lib/purge-countdown';
 	import type { PageTheme } from '$lib/theme-config';
 
 	let {
@@ -94,15 +95,31 @@
 			<p class="text-sm text-surface-500 mb-3">
 				This project has been soft-deleted.
 				{#if project.undeleteExpiresAt}
-					It will be permanently removed after {new Date(project.undeleteExpiresAt).toLocaleDateString()}.
+					It will be permanently removed after {new Date(project.undeleteExpiresAt).toLocaleDateString()}
+					({formatPurgeCountdown(project.undeleteExpiresAt)}).
 				{:else}
 					You have a 7-day grace period to restore it.
 				{/if}
 			</p>
-			<form method="post" action="?/undelete" use:enhance>
-				<input type="hidden" name="id" value={project.id} />
-				<button class="btn preset-filled-primary-500" type="submit">Restore project</button>
-			</form>
+			<div class="flex flex-wrap gap-2">
+				<form method="post" action="?/undelete" use:enhance>
+					<input type="hidden" name="id" value={project.id} />
+					<button class="btn preset-filled-primary-500" type="submit">Restore project</button>
+				</form>
+				<form
+					method="post"
+					action="?/purge"
+					use:enhance={({ cancel }) => {
+						const ok = confirm(
+							`Permanently delete "${project.name}"? This cannot be undone.`
+						);
+						if (!ok) cancel();
+					}}
+				>
+					<input type="hidden" name="id" value={project.id} />
+					<button class="btn preset-filled-error-500" type="submit">Purge</button>
+				</form>
+			</div>
 		{:else}
 			<p class="text-sm text-surface-500">This project has been deleted.</p>
 		{/if}

@@ -4,6 +4,7 @@
 	import { Settings } from 'lucide-svelte';
 	import ProjectCard from '$lib/components/ProjectCard.svelte';
 	import { checkTypeLabel, isCheckType, type PublicCheckSettings } from '$lib/checks';
+	import { formatPurgeCountdown } from '$lib/purge-countdown';
 	import {
 		formatPublishUrlHint,
 		SLUG_MAX_LENGTH,
@@ -53,6 +54,19 @@
 		selectedProjectId
 			? (data.projects.find((project) => project.id === selectedProjectId) ?? null)
 			: null
+	);
+
+	const activeProjects = $derived(data.projects.filter((project) => project.deletedAt == null));
+
+	const deletedProjects = $derived(
+		data.projects
+			.filter((project) => project.deletedAt != null)
+			.slice()
+			.sort((a, b) => {
+				const aTime = new Date(a.deletedAt!).getTime();
+				const bTime = new Date(b.deletedAt!).getTime();
+				return bTime - aTime;
+			})
 	);
 
 	type ServiceCheckSummary = {
@@ -348,101 +362,132 @@
 	</details>
 {/if}
 
+{#snippet projectRow(project: (typeof data.projects)[number])}
+	{@const services = data.servicesByProjectId[project.id] ?? []}
+	{@const expanded = !!expandedProjectIds[project.id]}
+	<li class="border-b border-surface-200-800">
+		<div class="flex flex-wrap items-center gap-2 py-3">
+			<button
+				type="button"
+				class="project-expand flex-1 min-w-0 text-left flex items-center gap-2 flex-wrap bg-transparent border-0 p-0 cursor-pointer text-inherit"
+				class:project-expand-open={expanded}
+				aria-expanded={expanded}
+				onclick={() => toggleProjectServices(project.id)}
+			>
+				<span class="font-semibold min-w-0">{project.name}</span>
+				<code
+					class="text-xs font-mono-status px-1.5 py-0.5 rounded bg-surface-200-800 text-surface-700-200"
+					>{project.slug}</code
+				>
+				{#if project.deletedAt}
+					<span
+						class="inline-block text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wide bg-error-500 text-white"
+						>Deleted</span
+					>
+					{#if project.undeleteExpiresAt}
+						<span class="text-xs text-surface-500"
+							>{formatPurgeCountdown(project.undeleteExpiresAt)}</span
+						>
+					{/if}
+				{:else if !project.published}
+					<span
+						class="inline-block text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wide bg-warning-500 text-white"
+						>Unpublished</span
+					>
+				{/if}
+			</button>
+			<button
+				class="btn-icon preset-outlined-secondary-500 shrink-0"
+				type="button"
+				aria-label="Settings"
+				onclick={() => openProjectSettings(project.id)}
+			>
+				<Settings size={18} strokeWidth={2} aria-hidden="true" />
+			</button>
+			{#if project.deletedAt}
+				<form
+					method="post"
+					action="?/purge"
+					use:enhance={({ cancel }) => {
+						const ok = confirm(
+							`Permanently delete "${project.name}"? This cannot be undone.`
+						);
+						if (!ok) cancel();
+					}}
+					class="shrink-0"
+				>
+					<input type="hidden" name="id" value={project.id} />
+					<button class="btn preset-filled-error-500" type="submit">Purge</button>
+				</form>
+			{:else}
+				<form method="post" action="?/deploy" use:enhance class="shrink-0">
+					<input type="hidden" name="id" value={project.id} />
+					<input type="hidden" name="hostProvider" value={project.hostProvider} />
+					<button
+						class="btn preset-filled-primary-500"
+						type="submit"
+						disabled={!data.providerReady[project.hostProvider]}
+					>
+						Deploy
+					</button>
+				</form>
+				<form method="post" action="?/setPublished" use:enhance class="shrink-0">
+					<input type="hidden" name="id" value={project.id} />
+					<input type="hidden" name="published" value={project.published ? 'false' : 'true'} />
+					<button type="submit" class="btn preset-outlined-secondary-500">
+						{project.published ? 'Unpublish' : 'Publish'}
+					</button>
+				</form>
+			{/if}
+		</div>
+		{#if expanded}
+			<div class="pb-3 pl-1">
+				{#if services.length === 0}
+					<p class="text-sm text-surface-500 m-0 mb-2">No services yet.</p>
+				{:else}
+					<ul class="m-0 mb-2 p-0 list-none flex flex-col gap-2">
+						{#each services as service (service.id)}
+							<li class="text-sm flex flex-col gap-0.5">
+								<span class="font-medium">{service.name}</span>
+								<p class="text-surface-500 m-0">
+									{formatServiceCheckSummary(service)}
+								</p>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				<a class="text-sm" href="/dashboard/services?team={data.team.id}&page={project.id}">
+					Manage services
+				</a>
+			</div>
+		{/if}
+	</li>
+{/snippet}
+
 <section class="mt-5 mb-5">
 	<h2 class="text-lg font-semibold mb-3">Existing Projects</h2>
 
-	{#if data.projects.length === 0}
+	{#if activeProjects.length === 0}
 		<p class="text-sm text-surface-500 m-0">No projects yet.</p>
 	{:else}
 		<ul class="project-list flex flex-col m-0 p-0 list-none">
-			{#each data.projects as project (project.id)}
-				{@const services = data.servicesByProjectId[project.id] ?? []}
-				{@const expanded = !!expandedProjectIds[project.id]}
-				<li class="border-b border-surface-200-800">
-					<div class="flex flex-wrap items-center gap-2 py-3">
-						<button
-							type="button"
-							class="project-expand flex-1 min-w-0 text-left flex items-center gap-2 flex-wrap bg-transparent border-0 p-0 cursor-pointer text-inherit"
-							class:project-expand-open={expanded}
-							aria-expanded={expanded}
-							onclick={() => toggleProjectServices(project.id)}
-						>
-							<span class="font-semibold min-w-0">{project.name}</span>
-							<code class="text-xs font-mono-status px-1.5 py-0.5 rounded bg-surface-200-800 text-surface-700-200">{project.slug}</code>
-							{#if project.deletedAt}
-								<span
-									class="inline-block text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wide bg-error-500 text-white"
-									>Deleted</span
-								>
-							{:else if !project.published}
-								<span
-									class="inline-block text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wide bg-warning-500 text-white"
-									>Unpublished</span
-								>
-							{/if}
-						</button>
-						<button
-							class="btn-icon preset-outlined-secondary-500 shrink-0"
-							type="button"
-							aria-label="Settings"
-							onclick={() => openProjectSettings(project.id)}
-						>
-							<Settings size={18} strokeWidth={2} aria-hidden="true" />
-						</button>
-						{#if !project.deletedAt}
-							<form method="post" action="?/deploy" use:enhance class="shrink-0">
-								<input type="hidden" name="id" value={project.id} />
-								<input type="hidden" name="hostProvider" value={project.hostProvider} />
-								<button
-									class="btn preset-filled-primary-500"
-									type="submit"
-									disabled={!data.providerReady[project.hostProvider]}
-								>
-									Deploy
-								</button>
-							</form>
-							<form method="post" action="?/setPublished" use:enhance class="shrink-0">
-								<input type="hidden" name="id" value={project.id} />
-								<input
-									type="hidden"
-									name="published"
-									value={project.published ? 'false' : 'true'}
-								/>
-								<button type="submit" class="btn preset-outlined-secondary-500">
-									{project.published ? 'Unpublish' : 'Publish'}
-								</button>
-							</form>
-						{/if}
-					</div>
-					{#if expanded}
-						<div class="pb-3 pl-1">
-							{#if services.length === 0}
-								<p class="text-sm text-surface-500 m-0 mb-2">No services yet.</p>
-							{:else}
-								<ul class="m-0 mb-2 p-0 list-none flex flex-col gap-2">
-									{#each services as service (service.id)}
-										<li class="text-sm flex flex-col gap-0.5">
-											<span class="font-medium">{service.name}</span>
-											<p class="text-surface-500 m-0">
-												{formatServiceCheckSummary(service)}
-											</p>
-										</li>
-									{/each}
-								</ul>
-							{/if}
-							<a
-								class="text-sm"
-								href="/dashboard/services?team={data.team.id}&page={project.id}"
-							>
-								Manage services
-							</a>
-						</div>
-					{/if}
-				</li>
+			{#each activeProjects as project (project.id)}
+				{@render projectRow(project)}
 			{/each}
 		</ul>
 	{/if}
 </section>
+
+{#if deletedProjects.length > 0}
+	<section class="mt-5 mb-5">
+		<h2 class="text-lg font-semibold mb-3">Deleted Projects</h2>
+		<ul class="project-list flex flex-col m-0 p-0 list-none">
+			{#each deletedProjects as project (project.id)}
+				{@render projectRow(project)}
+			{/each}
+		</ul>
+	</section>
+{/if}
 
 <dialog
 	bind:this={projectDialog}

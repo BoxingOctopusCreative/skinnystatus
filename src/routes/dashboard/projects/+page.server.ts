@@ -24,6 +24,7 @@ import {
 import { deployProject } from '$lib/server/deploy';
 import { providerReadyMap } from '$lib/server/host-credentials';
 import { resolveCurrentTeam } from '$lib/server/dashboard-page';
+import { PAGE_GRACE_DAYS } from '$lib/server/account-lifecycle';
 import {
 	getAccessibleStatusPage,
 	listStatusPagesForTeam,
@@ -31,6 +32,8 @@ import {
 	userCanManagePageLifecycle,
 	userCanMutatePage
 } from '$lib/server/teams';
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 	if (!locals.user) throw redirect(303, '/dashboard/login');
@@ -55,7 +58,7 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 				published: p.published,
 				deletedAt: p.deletedAt,
 				undeleteExpiresAt: p.deletedAt
-					? new Date(p.deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000)
+					? new Date(p.deletedAt.getTime() + PAGE_GRACE_DAYS * MS_PER_DAY)
 					: null,
 				canManageLifecycle
 			};
@@ -289,6 +292,22 @@ export const actions: Actions = {
 			.update(statusPage)
 			.set({ deletedAt: null, updatedAt: new Date() })
 			.where(eq(statusPage.id, id));
+		return { success: true };
+	},
+	purge: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { message: 'Unauthorized' });
+		const form = await request.formData();
+		const id = form.get('id')?.toString() ?? '';
+		if (!id) return fail(400, { message: 'ID is required' });
+
+		const canLifecycle = await userCanManagePageLifecycle(locals.user.id, id);
+		if (!canLifecycle) return fail(404, { message: 'Project not found' });
+
+		const page = await getAccessibleStatusPage(id, locals.user.id);
+		if (!page) return fail(404, { message: 'Project not found' });
+		if (!page.deletedAt) return fail(400, { message: 'Project must be deleted before it can be purged' });
+
+		await db.delete(statusPage).where(eq(statusPage.id, id));
 		return { success: true };
 	},
 	setPublished: async ({ request, locals }) => {
