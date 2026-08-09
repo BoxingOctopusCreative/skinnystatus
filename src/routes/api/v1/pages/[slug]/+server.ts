@@ -43,7 +43,8 @@ export const GET: RequestHandler = async ({ params }) => {
 			slug: page.slug,
 			name: page.name,
 			description: page.description,
-			theme: page.theme
+			theme: page.theme,
+			checkDetailsEnabled: page.checkDetailsEnabled
 		},
 		overall,
 		overallLabel: statusLabel(overall),

@@ -189,6 +189,9 @@ export const actions: Actions = {
 		const publishMode = form.get('publishMode')?.toString() ?? 'path';
 		const hostProvider = form.get('hostProvider')?.toString() ?? 'vercel';
 		const theme = themeFromForm(form);
+		const checkDetailsEnabled = form.get('checkDetailsEnabled') === 'on';
+		const checkDetailsIncludeErrors =
+			checkDetailsEnabled && form.get('checkDetailsIncludeErrors') === 'on';
 
 		let publishBaseDomain: string | null = null;
 		let publishPathPrefix = 's';
@@ -231,6 +234,8 @@ export const actions: Actions = {
 						publishBaseDomain,
 						publishPathPrefix,
 						themeJson: serializePageTheme(theme),
+						checkDetailsEnabled,
+						checkDetailsIncludeErrors,
 						updatedAt: new Date()
 					})
 					.where(eq(statusPage.id, id));
@@ -241,6 +246,8 @@ export const actions: Actions = {
 						name,
 						description,
 						themeJson: serializePageTheme(theme),
+						checkDetailsEnabled,
+						checkDetailsIncludeErrors,
 						updatedAt: new Date()
 					})
 					.where(eq(statusPage.id, id));
@@ -305,7 +312,8 @@ export const actions: Actions = {
 
 		const page = await getAccessibleStatusPage(id, locals.user.id);
 		if (!page) return fail(404, { message: 'Project not found' });
-		if (!page.deletedAt) return fail(400, { message: 'Project must be deleted before it can be purged' });
+		if (!page.deletedAt)
+			return fail(400, { message: 'Project must be deleted before it can be purged' });
 
 		await db.delete(statusPage).where(eq(statusPage.id, id));
 		return { success: true };

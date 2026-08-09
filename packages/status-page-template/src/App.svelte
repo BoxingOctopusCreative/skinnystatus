@@ -1,6 +1,7 @@
 <script lang="ts">
 	import UptimeHistoryGraph from './UptimeHistoryGraph.svelte';
 	import type { UptimeDayBucket } from './uptime';
+	import type { CheckDayDetail } from './check-detail';
 
 	type Theme = {
 		brandName: string;
@@ -18,7 +19,13 @@
 	};
 
 	type PagePayload = {
-		page: { slug: string; name: string; description: string | null; theme: Theme };
+		page: {
+			slug: string;
+			name: string;
+			description: string | null;
+			theme: Theme;
+			checkDetailsEnabled?: boolean;
+		};
 		overall: string;
 		overallLabel: string;
 		services: Array<{
@@ -143,6 +150,16 @@
 		incidentView = json.incident;
 	}
 
+	async function loadCheckDetail(serviceId: string, date: string): Promise<CheckDayDetail> {
+		const base = config.apiBase.replace(/\/$/, '');
+		const res = await fetch(
+			`${base}/api/v1/pages/${config.pageSlug}/services/${serviceId}/days/${date}`
+		);
+		if (!res.ok) throw new Error(`Could not load check detail (${res.status})`);
+		const json = (await res.json()) as { detail: CheckDayDetail };
+		return json.detail;
+	}
+
 	function formatUptime(value: number | null): string {
 		if (value === null) return 'No data';
 		return `${(value * 100).toFixed(2)}%`;
@@ -150,7 +167,8 @@
 
 	function statusBadgeClass(status: string): string {
 		if (status === 'operational') return 'badge preset-filled-success-500';
-		if (status === 'degraded' || status === 'partial_outage') return 'badge preset-filled-warning-500';
+		if (status === 'degraded' || status === 'partial_outage')
+			return 'badge preset-filled-warning-500';
 		if (status === 'major_outage') return 'badge preset-filled-error-500';
 		return 'badge preset-filled-tertiary-500';
 	}
@@ -168,15 +186,10 @@
 		return () => clearInterval(timer);
 	});
 
-	const activeTheme = $derived(
-		data?.page.theme?.colors ? data.page.theme : config.theme
-	);
+	const activeTheme = $derived(data?.page.theme?.colors ? data.page.theme : config.theme);
 
 	const brand = $derived(
-		data?.page.theme?.brandName ||
-			config.theme.brandName ||
-			data?.page.name ||
-			'Status'
+		data?.page.theme?.brandName || config.theme.brandName || data?.page.name || 'Status'
 	);
 	/** Empty logoUrl on the page theme means no logo - do not fall back to the default mark. */
 	const logo = $derived(
@@ -345,7 +358,12 @@
 								<span class={statusBadgeClass(item.status)}>{statusLabel(item.status)}</span>
 							</div>
 							{#if uptime[item.id]}
-								<UptimeHistoryGraph buckets={uptime[item.id]} />
+								<UptimeHistoryGraph
+									buckets={uptime[item.id]}
+									loadDetail={data.page.checkDetailsEnabled
+										? (date) => loadCheckDetail(item.id, date)
+										: null}
+								/>
 							{/if}
 						</div>
 					{/each}
@@ -372,7 +390,11 @@
 		{/if}
 
 		<footer class="py-8 text-sm border-t border-(--tenant-line)" style="color: var(--tenant-muted)">
-			<span>Powered by <a href="https://skinnystatus.app" target="_blank" rel="noopener noreferrer">SkinnyStatus</a></span>
+			<span
+				>Powered by <a href="https://skinnystatus.app" target="_blank" rel="noopener noreferrer"
+					>SkinnyStatus</a
+				></span
+			>
 		</footer>
 	</div>
 </div>

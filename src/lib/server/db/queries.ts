@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, lt, ne, sql } from 'drizzle-orm';
 import {
 	db,
 	service,
@@ -27,7 +27,15 @@ import {
 	type IncidentStatus
 } from '$lib/status';
 import { toPublicCheckSettings } from '$lib/server/checks';
+import { checkTypeLabel, describeCheckTarget, isCheckType } from '$lib/checks';
 import type { PublicCheckSettings } from '$lib/checks';
+import {
+	buildCheckDayDetail,
+	redactCheckDayDetail,
+	stripTargetQuery,
+	type CheckDayDetail,
+	type CheckSample
+} from '$lib/check-detail';
 
 export type ServiceRow = {
 	id: string;
@@ -90,6 +98,8 @@ export type StatusPageRow = {
 	lastDeployedAt: Date | null;
 	lastDeployError: string | null;
 	published: boolean;
+	checkDetailsEnabled: boolean;
+	checkDetailsIncludeErrors: boolean;
 	deletedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -214,11 +224,14 @@ export function slugFromEmail(email: string): string {
 }
 
 /** Ensure the user has a team and that team has at least one project. */
-export async function ensureDefaultStatusPage(ownerId: string, opts?: {
-	name?: string;
-	email?: string;
-	teamId?: string;
-}): Promise<StatusPageInfo> {
+export async function ensureDefaultStatusPage(
+	ownerId: string,
+	opts?: {
+		name?: string;
+		email?: string;
+		teamId?: string;
+	}
+): Promise<StatusPageInfo> {
 	const { ensureUserHasTeam, listActiveStatusPagesForTeam } = await import('$lib/server/teams');
 	const teamRow = opts?.teamId
 		? { id: opts.teamId }
@@ -234,9 +247,7 @@ export async function ensureDefaultStatusPage(ownerId: string, opts?: {
 	const id = crypto.randomUUID();
 	const now = new Date();
 	const name = opts?.name?.trim() || config.site.name;
-	const slug = await allocateSlug(
-		opts?.email ? slugFromEmail(opts.email) : `p-${id.slice(0, 8)}`
-	);
+	const slug = await allocateSlug(opts?.email ? slugFromEmail(opts.email) : `p-${id.slice(0, 8)}`);
 	const theme = {
 		...DEFAULT_PAGE_THEME,
 		brandName: name
@@ -274,6 +285,8 @@ export async function ensureDefaultStatusPage(ownerId: string, opts?: {
 		lastDeployedAt: null,
 		lastDeployError: null,
 		published: true,
+		checkDetailsEnabled: false,
+		checkDetailsIncludeErrors: false,
 		deletedAt: null,
 		createdAt: now,
 		updatedAt: now
@@ -392,6 +405,91 @@ export async function dailyUptimeBuckets(
 	}
 
 	return result;
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function toCheckSample(row: CheckResultRow): CheckSample {
+	return {
+		checkedAt: new Date(row.checkedAt).toISOString(),
+		ok: row.ok,
+		latencyMs: row.latencyMs,
+		statusCode: row.statusCode,
+		error: row.error
+	};
+}
+
+/**
+ * Detail behind a single uptime bar: every check recorded for that UTC day,
+ * summarized. Day boundaries match `dailyUptimeBuckets` so the panel always
+ * agrees with the bar it opened from.
+ *
+ * Returns null when the date is malformed or the service isn't on this page.
+ *
+ * `includeTargetQuery` belongs to operators only: a check URL can carry an API
+ * key in its query string, so visitors see scheme, host, and path.
+ */
+export async function checkDayDetail(
+	statusPageId: string,
+	serviceId: string,
+	date: string,
+	opts: {
+		includeTechnicalDetail: boolean;
+		includeLatestCheck: boolean;
+		includeTargetQuery: boolean;
+	}
+): Promise<CheckDayDetail | null> {
+	if (!ISO_DAY.test(date)) return null;
+	const dayStart = new Date(`${date}T00:00:00.000Z`);
+	if (Number.isNaN(dayStart.getTime())) return null;
+	const dayEnd = new Date(dayStart.getTime() + MS_PER_DAY);
+
+	const serviceRows: ServiceRow[] = await db
+		.select()
+		.from(service)
+		.where(and(eq(service.id, serviceId), eq(service.statusPageId, statusPageId)))
+		.limit(1);
+	const row = serviceRows[0];
+	if (!row) return null;
+
+	const dayRows: CheckResultRow[] = await db
+		.select()
+		.from(checkResult)
+		.where(
+			and(
+				eq(checkResult.serviceId, serviceId),
+				gte(checkResult.checkedAt, dayStart),
+				lt(checkResult.checkedAt, dayEnd)
+			)
+		)
+		.orderBy(checkResult.checkedAt);
+
+	let latestCheck: CheckSample | null = null;
+	if (opts.includeLatestCheck) {
+		const latestRows: CheckResultRow[] = await db
+			.select()
+			.from(checkResult)
+			.where(eq(checkResult.serviceId, serviceId))
+			.orderBy(desc(checkResult.checkedAt))
+			.limit(1);
+		latestCheck = latestRows[0] ? toCheckSample(latestRows[0]) : null;
+	}
+
+	const settings = toPublicCheckSettings(row.checkType, row.checkConfig);
+	const target = describeCheckTarget(settings, row.checkUrl);
+	const detail = buildCheckDayDetail({
+		serviceId: row.id,
+		serviceName: row.name,
+		date,
+		checkLabel: row.checkType && isCheckType(row.checkType) ? checkTypeLabel(row.checkType) : null,
+		checkTarget: opts.includeTargetQuery ? target : stripTargetQuery(target),
+		expectedStatus: row.checkType === 'http' ? row.expectedStatus : null,
+		samples: dayRows.map(toCheckSample),
+		latestCheck
+	});
+
+	return opts.includeTechnicalDetail ? detail : redactCheckDayDetail(detail);
 }
 
 export async function getServiceViews(statusPageId: string): Promise<ServiceView[]> {

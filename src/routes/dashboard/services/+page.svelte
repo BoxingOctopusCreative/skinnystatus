@@ -9,6 +9,27 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 </script>
 
+{#snippet testResult(target: string)}
+	{#if form && 'testOutcome' in form && form.testTarget === target}
+		{@const outcome = form.testOutcome}
+		<p
+			class="text-sm mt-2 mb-0 {outcome.ok ? 'text-success-600-400' : 'text-error-500'}"
+			aria-live="polite"
+		>
+			<strong>{outcome.ok ? 'Check passed' : 'Check failed'}</strong>
+			{#if outcome.statusCode !== null}
+				· HTTP {outcome.statusCode}
+			{/if}
+			{#if outcome.latencyMs !== null}
+				· {outcome.latencyMs} ms
+			{/if}
+			{#if outcome.error}
+				· {outcome.error}
+			{/if}
+		</p>
+	{/if}
+{/snippet}
+
 <svelte:head>
 	<title>Services · {data.team.name}</title>
 </svelte:head>
@@ -72,9 +93,11 @@
 				</select>
 			</label>
 		</div>
-		<div>
+		<div class="flex items-center gap-2">
 			<button class="btn preset-filled-primary-500" type="submit">Create</button>
+			<button class="btn preset-tonal" type="submit" formaction="?/test">Test check now</button>
 		</div>
+		{@render testResult('new')}
 	</form>
 </details>
 
@@ -141,6 +164,14 @@
 					>
 						<Save size={18} strokeWidth={2} aria-hidden="true" />
 					</button>
+					<button
+						class="btn preset-tonal shrink-0"
+						type="submit"
+						form="service-update-{c.id}"
+						formaction="?/test"
+					>
+						Test check now
+					</button>
 					<form method="post" action="?/delete" use:enhance class="shrink-0">
 						<input type="hidden" name="id" value={c.id} />
 						<button class="btn-icon preset-filled-error-500" type="submit" aria-label="Delete">
@@ -148,6 +179,7 @@
 						</button>
 					</form>
 				</div>
+				{@render testResult(c.id)}
 			</div>
 		{/each}
 	{/if}

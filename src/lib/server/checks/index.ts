@@ -2,6 +2,7 @@ import {
 	isCheckType,
 	type DbCheckConfig,
 	type DnsCheckConfig,
+	type HttpCheckConfig,
 	type RedisCheckConfig,
 	type SslCheckConfig,
 	type TcpCheckConfig
@@ -34,7 +35,8 @@ export async function runServiceCheck(
 				if (!service.checkUrl) {
 					return failOutcome(startedAt, 'Missing check URL');
 				}
-				return runHttpCheck(service.checkUrl, service.expectedStatus, timeoutMs);
+				const auth = decryptCheckConfig<HttpCheckConfig>(service.checkConfig);
+				return runHttpCheck(service.checkUrl, service.expectedStatus, timeoutMs, auth);
 			}
 			case 'tcp': {
 				const cfg = decryptCheckConfig<TcpCheckConfig>(service.checkConfig);
@@ -72,4 +74,9 @@ export async function runServiceCheck(
 	}
 }
 
-export { decryptCheckConfig, parseCheckFieldsFromForm, toPublicCheckSettings, sslDaysRemaining } from './config';
+export {
+	decryptCheckConfig,
+	parseCheckFieldsFromForm,
+	toPublicCheckSettings,
+	sslDaysRemaining
+} from './config';

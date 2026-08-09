@@ -5,6 +5,7 @@
 	import SubscribeButton from '$lib/components/SubscribeButton.svelte';
 	import UptimeHistoryGraph from '$lib/components/UptimeHistoryGraph.svelte';
 	import type { UptimeDayBucket } from '$lib/uptime';
+	import type { CheckDayDetail } from '$lib/check-detail';
 
 	type PagePayload = {
 		page: { slug: string; name: string; description: string | null; theme: PageTheme };
@@ -93,6 +94,17 @@
 		incidentView = json.incident;
 	}
 
+	/**
+	 * Operator route, so it returns the unredacted detail regardless of the
+	 * project's visitor-facing check detail settings.
+	 */
+	async function loadCheckDetail(serviceId: string, date: string): Promise<CheckDayDetail> {
+		const res = await fetch(`/dashboard/preview/${pageSlug}/checks/${serviceId}/${date}`);
+		if (!res.ok) throw new Error(`Could not load check detail (${res.status})`);
+		const json = (await res.json()) as { detail: CheckDayDetail };
+		return json.detail;
+	}
+
 	function formatUptime(value: number | null): string {
 		if (value === null) return 'No data';
 		return `${(value * 100).toFixed(2)}%`;
@@ -104,17 +116,13 @@
 		return () => clearInterval(timer);
 	});
 
-	const activeTheme = $derived(
-		data?.page.theme?.colors ? data.page.theme : theme
-	);
+	const activeTheme = $derived(data?.page.theme?.colors ? data.page.theme : theme);
 
 	const brand = $derived(
 		data?.page.theme?.brandName || theme.brandName || data?.page.name || 'Status'
 	);
 	/** Empty logoUrl on the page theme means no logo - do not fall back to the default mark. */
-	const logo = $derived(
-		data?.page.theme ? (data.page.theme.logoUrl || '') : theme.logoUrl || ''
-	);
+	const logo = $derived(data?.page.theme ? data.page.theme.logoUrl || '' : theme.logoUrl || '');
 
 	const dotClass = $derived(
 		data?.overall === 'major_outage'
@@ -129,7 +137,6 @@
 	);
 </script>
 
-
 <div class="status-live status-theme-bridge" style={rootStyle}>
 	{#if preview}
 		<div class="preview-banner" role="status">
@@ -140,7 +147,9 @@
 	{/if}
 
 	<div class="mx-auto w-[min(880px,calc(100%-2rem))]">
-		<header class="flex justify-between items-center gap-4 pt-7 pb-5 border-b border-(--tenant-line) mb-6">
+		<header
+			class="flex justify-between items-center gap-4 pt-7 pb-5 border-b border-(--tenant-line) mb-6"
+		>
 			<div>
 				<a class="brand" href={basePath || '#'}>
 					{#if logo}
@@ -154,7 +163,7 @@
 				{/if}
 			</div>
 			<div class="flex items-center gap-3">
-				<SubscribeButton apiBase={apiBase} {pageSlug} />
+				<SubscribeButton {apiBase} {pageSlug} />
 			</div>
 		</header>
 
@@ -183,7 +192,10 @@
 				{/each}
 			</section>
 		{:else}
-			<section class="flex items-center gap-3 p-4 border border-(--tenant-line) rounded-md mb-6" aria-live="polite">
+			<section
+				class="flex items-center gap-3 p-4 border border-(--tenant-line) rounded-md mb-6"
+				aria-live="polite"
+			>
 				<span class={dotClass} aria-hidden="true"></span>
 				<div>
 					<h2 class="m-0 text-lg font-semibold">{data.overallLabel}</h2>
@@ -204,7 +216,9 @@
 								</button>
 							</h3>
 							<p class="text-sm mt-0.5 m-0" style="color: var(--tenant-muted)">
-								{incident.status} · {incident.impact} · {new Date(incident.createdAt).toLocaleString()}
+								{incident.status} · {incident.impact} · {new Date(
+									incident.createdAt
+								).toLocaleString()}
 							</p>
 						</article>
 					{/each}
@@ -220,7 +234,9 @@
 								<div>
 									<div class="font-semibold">{item.name}</div>
 									{#if item.description}
-										<p class="mt-1 text-sm m-0" style="color: var(--tenant-muted)">{item.description}</p>
+										<p class="mt-1 text-sm m-0" style="color: var(--tenant-muted)">
+											{item.description}
+										</p>
 									{/if}
 									{#if item.uptime90d !== null}
 										<p class="mt-1 text-sm m-0" style="color: var(--tenant-muted)">
@@ -231,7 +247,10 @@
 								<StatusPill status={item.status as import('$lib/status').ServiceStatus} />
 							</div>
 							{#if uptime[item.id]}
-								<UptimeHistoryGraph buckets={uptime[item.id]} />
+								<UptimeHistoryGraph
+									buckets={uptime[item.id]}
+									loadDetail={(date) => loadCheckDetail(item.id, date)}
+								/>
 							{/if}
 						</div>
 					{/each}
@@ -258,7 +277,11 @@
 		{/if}
 
 		<footer class="py-8 text-sm border-t border-(--tenant-line)" style="color: var(--tenant-muted)">
-			<span>Powered by <a href="https://skinnystatus.app" target="_blank" rel="noopener noreferrer">SkinnyStatus</a></span>
+			<span
+				>Powered by <a href="https://skinnystatus.app" target="_blank" rel="noopener noreferrer"
+					>SkinnyStatus</a
+				></span
+			>
 		</footer>
 	</div>
 </div>

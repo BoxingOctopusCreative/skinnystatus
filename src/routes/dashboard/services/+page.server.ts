@@ -3,7 +3,8 @@ import { eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { CHECK_TYPES, checkTypeLabel, DNS_RECORD_TYPES } from '$lib/checks';
 import { assertCanCreateService, isLimitError } from '$lib/server/billing/limits';
-import { parseCheckFieldsFromForm } from '$lib/server/checks';
+import { parseCheckFieldsFromForm, runServiceCheck } from '$lib/server/checks';
+import { getConfig } from '$lib/server/config';
 import { db, service } from '$lib/server/db';
 import { getService, getServiceViews } from '$lib/server/db/queries';
 import { resolveAdminPageId, requireMutablePage } from '$lib/server/dashboard-page';
@@ -102,6 +103,59 @@ export const actions: Actions = {
 			.where(eq(service.id, id));
 
 		return { success: true };
+	},
+	/**
+	 * Run the check once against the fields currently in the form, without saving.
+	 * Lets an operator confirm credentials instead of waiting for the next cycle.
+	 */
+	test: async ({ request, url, locals, cookies }) => {
+		if (!locals.user) return fail(401, { message: 'Unauthorized' });
+		const form = await request.formData();
+		const id = form.get('id')?.toString() ?? '';
+
+		let existing: Awaited<ReturnType<typeof getService>> = undefined;
+		if (id) {
+			existing = await getService(id);
+			if (!existing) return fail(404, { message: 'Service not found' });
+			await requireMutablePage(existing.statusPageId, locals.user.id);
+		} else {
+			const fromForm = form.get('statusPageId')?.toString();
+			if (fromForm) {
+				await requireMutablePage(fromForm, locals.user.id);
+			} else {
+				await resolveAdminPageId(url, locals.user.id, cookies);
+			}
+		}
+
+		const parsed = parseCheckFieldsFromForm(
+			form,
+			existing ? { checkType: existing.checkType, checkConfig: existing.checkConfig } : undefined
+		);
+		if (!parsed.ok) return fail(400, { message: parsed.message });
+		if (!parsed.value.checkType) {
+			return fail(400, { message: 'Choose a check type before testing' });
+		}
+
+		const { checks } = getConfig();
+		const outcome = await runServiceCheck(
+			{
+				checkType: parsed.value.checkType,
+				checkUrl: parsed.value.checkUrl,
+				expectedStatus: parsed.value.expectedStatus,
+				checkConfig: parsed.value.checkConfig
+			},
+			checks.timeoutMs
+		);
+
+		return {
+			testTarget: id || 'new',
+			testOutcome: {
+				ok: outcome.ok,
+				latencyMs: outcome.latencyMs,
+				statusCode: outcome.statusCode,
+				error: outcome.error
+			}
+		};
 	},
 	delete: async ({ request, locals }) => {
 		if (!locals.user) return fail(401, { message: 'Unauthorized' });

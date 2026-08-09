@@ -1,11 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { decryptJson } from '../crypto';
 import { initConfig, resetConfigCache, resetDotEnvForTests } from '../config';
-import {
-	parseCheckFieldsFromForm,
-	sslDaysRemaining,
-	toPublicCheckSettings
-} from './config';
+import { parseCheckFieldsFromForm, sslDaysRemaining, toPublicCheckSettings } from './config';
 import { resolveServiceStatus } from '$lib/status';
 
 function disableInfisicalForTests(): void {
@@ -147,7 +143,193 @@ describe('parseCheckFieldsFromForm', () => {
 	});
 });
 
+describe('HTTP check authentication', () => {
+	function httpForm(fields: Record<string, string>): FormData {
+		const form = new FormData();
+		form.set('checkType', 'http');
+		form.set('checkUrl', 'https://api.example.com/health');
+		for (const [key, value] of Object.entries(fields)) form.set(key, value);
+		return form;
+	}
+
+	it('stores no config when auth is off', async () => {
+		await readyCrypto();
+		const parsed = parseCheckFieldsFromForm(httpForm({ httpAuthMode: 'none' }));
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.value.checkConfig).toBeNull();
+	});
+
+	it('treats a missing auth mode as off, so existing checks keep working', async () => {
+		await readyCrypto();
+		const parsed = parseCheckFieldsFromForm(httpForm({}));
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.value.checkConfig).toBeNull();
+	});
+
+	it('encrypts a bearer token', async () => {
+		await readyCrypto();
+		const parsed = parseCheckFieldsFromForm(
+			httpForm({ httpAuthMode: 'bearer', httpAuthToken: 'sk-live-123' })
+		);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.value.checkConfig).not.toContain('sk-live-123');
+		expect(decryptJson(parsed.value.checkConfig!)).toEqual({
+			auth: 'bearer',
+			token: 'sk-live-123'
+		});
+	});
+
+	it('keeps the stored token when the field is left blank', async () => {
+		await readyCrypto();
+		const first = parseCheckFieldsFromForm(
+			httpForm({ httpAuthMode: 'bearer', httpAuthToken: 'sk-live-123' })
+		);
+		expect(first.ok).toBe(true);
+		if (!first.ok) return;
+
+		const second = parseCheckFieldsFromForm(httpForm({ httpAuthMode: 'bearer' }), {
+			checkType: 'http',
+			checkConfig: first.value.checkConfig
+		});
+		expect(second.ok).toBe(true);
+		if (!second.ok) return;
+		expect(decryptJson(second.value.checkConfig!)).toEqual({
+			auth: 'bearer',
+			token: 'sk-live-123'
+		});
+	});
+
+	it('does not carry a secret across a change of method', async () => {
+		await readyCrypto();
+		const bearer = parseCheckFieldsFromForm(
+			httpForm({ httpAuthMode: 'bearer', httpAuthToken: 'sk-live-123' })
+		);
+		expect(bearer.ok).toBe(true);
+		if (!bearer.ok) return;
+
+		const switched = parseCheckFieldsFromForm(
+			httpForm({ httpAuthMode: 'basic', httpAuthUsername: 'health' }),
+			{ checkType: 'http', checkConfig: bearer.value.checkConfig }
+		);
+		expect(switched.ok).toBe(false);
+		if (switched.ok) return;
+		expect(switched.message).toMatch(/password is required/i);
+	});
+
+	it('does not reuse a database password as an HTTP credential', async () => {
+		await readyCrypto();
+		const dbForm = new FormData();
+		dbForm.set('checkType', 'postgres');
+		dbForm.set('host', 'db.internal');
+		dbForm.set('authenticated', 'on');
+		dbForm.set('user', 'app');
+		dbForm.set('password', 'db-secret');
+		const dbParsed = parseCheckFieldsFromForm(dbForm);
+		expect(dbParsed.ok).toBe(true);
+		if (!dbParsed.ok) return;
+
+		const parsed = parseCheckFieldsFromForm(httpForm({ httpAuthMode: 'bearer' }), {
+			checkType: 'postgres',
+			checkConfig: dbParsed.value.checkConfig
+		});
+		expect(parsed.ok).toBe(false);
+		if (parsed.ok) return;
+		expect(parsed.message).toMatch(/token is required/i);
+	});
+
+	it('requires a username for basic auth and rejects a colon in it', async () => {
+		await readyCrypto();
+		const missing = parseCheckFieldsFromForm(
+			httpForm({ httpAuthMode: 'basic', httpAuthPassword: 'secret' })
+		);
+		expect(missing.ok).toBe(false);
+
+		const colon = parseCheckFieldsFromForm(
+			httpForm({
+				httpAuthMode: 'basic',
+				httpAuthUsername: 'user:name',
+				httpAuthPassword: 'secret'
+			})
+		);
+		expect(colon.ok).toBe(false);
+		if (colon.ok) return;
+		expect(colon.message).toMatch(/colon/i);
+	});
+
+	it('rejects a header name that is not a valid token', async () => {
+		await readyCrypto();
+		const parsed = parseCheckFieldsFromForm(
+			httpForm({
+				httpAuthMode: 'header',
+				httpAuthHeaderName: 'X-Bad Header',
+				httpAuthHeaderValue: 'abc'
+			})
+		);
+		expect(parsed.ok).toBe(false);
+		if (parsed.ok) return;
+		expect(parsed.message).toMatch(/header name/i);
+	});
+
+	it('rejects credentials containing a line break', async () => {
+		await readyCrypto();
+		const parsed = parseCheckFieldsFromForm(
+			httpForm({
+				httpAuthMode: 'header',
+				httpAuthHeaderName: 'X-API-Key',
+				httpAuthHeaderValue: 'abc\r\nX-Admin: true'
+			})
+		);
+		expect(parsed.ok).toBe(false);
+		if (parsed.ok) return;
+		expect(parsed.message).toMatch(/line breaks/i);
+	});
+
+	it('rejects an unknown auth mode', async () => {
+		await readyCrypto();
+		const parsed = parseCheckFieldsFromForm(httpForm({ httpAuthMode: 'oauth' }));
+		expect(parsed.ok).toBe(false);
+		if (parsed.ok) return;
+		expect(parsed.message).toMatch(/authentication method/i);
+	});
+});
+
 describe('toPublicCheckSettings', () => {
+	it('reports HTTP auth without exposing the secret', async () => {
+		await readyCrypto();
+		const form = new FormData();
+		form.set('checkType', 'http');
+		form.set('checkUrl', 'https://api.example.com/health');
+		form.set('httpAuthMode', 'header');
+		form.set('httpAuthHeaderName', 'X-API-Key');
+		form.set('httpAuthHeaderValue', 'super-secret-key');
+		const parsed = parseCheckFieldsFromForm(form);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+
+		const pub = toPublicCheckSettings('http', parsed.value.checkConfig);
+		expect(pub).toEqual({
+			type: 'http',
+			auth: 'header',
+			hasCredential: true,
+			username: '',
+			headerName: 'X-API-Key'
+		});
+		expect(JSON.stringify(pub)).not.toContain('super-secret-key');
+	});
+
+	it('reports no auth for an HTTP check with no stored config', () => {
+		expect(toPublicCheckSettings('http', null)).toEqual({
+			type: 'http',
+			auth: 'none',
+			hasCredential: false,
+			username: '',
+			headerName: ''
+		});
+	});
+
 	it('strips secrets from postgres config', async () => {
 		await readyCrypto();
 		const form = new FormData();

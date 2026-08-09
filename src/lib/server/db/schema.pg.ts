@@ -113,6 +113,10 @@ export const statusPage = pgTable(
 		lastDeployedAt: timestamp('last_deployed_at', { withTimezone: true }),
 		lastDeployError: text('last_deploy_error'),
 		published: boolean('published').default(true).notNull(),
+		/** Visitors may click an uptime bar to open that day's check detail. */
+		checkDetailsEnabled: boolean('check_details_enabled').default(false).notNull(),
+		/** Include status codes and raw error strings in visitor-facing check detail. */
+		checkDetailsIncludeErrors: boolean('check_details_include_errors').default(false).notNull(),
 		deletedAt: timestamp('deleted_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true })

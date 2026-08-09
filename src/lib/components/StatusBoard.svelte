@@ -4,12 +4,18 @@
 	import SubscribeButton from '$lib/components/SubscribeButton.svelte';
 	import UptimeHistoryGraph from '$lib/components/UptimeHistoryGraph.svelte';
 	import type { UptimeDayBucket } from '$lib/uptime';
+	import type { CheckDayDetail } from '$lib/check-detail';
 
 	let {
 		data
 	}: {
 		data: {
-			page: { name: string; description: string | null; slug: string };
+			page: {
+				name: string;
+				description: string | null;
+				slug: string;
+				checkDetailsEnabled: boolean;
+			};
 			basePath: string;
 			overall: string;
 			overallLabel: string;
@@ -45,6 +51,13 @@
 	function formatDate(value: Date | string | null | undefined): string {
 		if (!value) return '';
 		return new Date(value).toLocaleString();
+	}
+
+	async function loadCheckDetail(serviceId: string, date: string): Promise<CheckDayDetail> {
+		const res = await fetch(`/api/v1/pages/${data.page.slug}/services/${serviceId}/days/${date}`);
+		if (!res.ok) throw new Error(`Could not load check detail (${res.status})`);
+		const json = (await res.json()) as { detail: CheckDayDetail };
+		return json.detail;
 	}
 
 	const incidentHref = (id: string) =>
@@ -120,9 +133,7 @@
 		{:else}
 			<div class="border border-surface-200-800 rounded-md overflow-hidden mb-4">
 				{#each data.services as item (item.id)}
-					<div
-						class="flex flex-col gap-0.5 px-4 py-4 not-last:border-b border-surface-200-800"
-					>
+					<div class="flex flex-col gap-0.5 px-4 py-4 not-last:border-b border-surface-200-800">
 						<div class="grid grid-cols-[1fr_auto] gap-4 items-start">
 							<div>
 								<div class="font-semibold">{item.name}</div>
@@ -136,7 +147,12 @@
 							<StatusPill status={item.status} />
 						</div>
 						{#if data.uptimeByService[item.id]}
-							<UptimeHistoryGraph buckets={data.uptimeByService[item.id]} />
+							<UptimeHistoryGraph
+								buckets={data.uptimeByService[item.id]}
+								loadDetail={data.page.checkDetailsEnabled
+									? (date) => loadCheckDetail(item.id, date)
+									: null}
+							/>
 						{/if}
 					</div>
 				{/each}
@@ -161,6 +177,10 @@
 	{/if}
 
 	<footer class="py-8 text-surface-500 text-sm border-t border-surface-200-800">
-		<span>Powered by <a href="https://skinnystatus.app" target="_blank" rel="noopener noreferrer">SkinnyStatus</a></span>
+		<span
+			>Powered by <a href="https://skinnystatus.app" target="_blank" rel="noopener noreferrer"
+				>SkinnyStatus</a
+			></span
+		>
 	</footer>
 </div>

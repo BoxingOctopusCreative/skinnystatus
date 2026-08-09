@@ -22,6 +22,10 @@ export type StatusPageInfo = {
 	lastDeployedAt: Date | null;
 	lastDeployError: string | null;
 	published: boolean;
+	/** Visitors may click an uptime bar to open that day's check detail. */
+	checkDetailsEnabled: boolean;
+	/** Include status codes and raw error strings in visitor-facing check detail. */
+	checkDetailsIncludeErrors: boolean;
 	deletedAt: Date | null;
 };
 
@@ -89,7 +93,10 @@ export function normalizePublishBaseDomain(raw: string): string | null {
 }
 
 export function normalizePublishPathPrefix(raw: string): string {
-	const value = raw.trim().toLowerCase().replace(/^\/+|\/+$/g, '');
+	const value = raw
+		.trim()
+		.toLowerCase()
+		.replace(/^\/+|\/+$/g, '');
 	if (!isValidPublishPathPrefix(value)) {
 		throw new Error(
 			'Path prefix must be lowercase alphanumeric with optional hyphens (1–33 chars)'
@@ -220,6 +227,8 @@ export function pageInfoFromRow(row: {
 	lastDeployedAt?: Date | null;
 	lastDeployError?: string | null;
 	published?: boolean | null;
+	checkDetailsEnabled?: boolean | null;
+	checkDetailsIncludeErrors?: boolean | null;
 	deletedAt?: Date | null;
 }): StatusPageInfo {
 	const mode = isPublishMode(row.publishMode) ? row.publishMode : 'path';
@@ -241,6 +250,8 @@ export function pageInfoFromRow(row: {
 		lastDeployedAt: row.lastDeployedAt ?? null,
 		lastDeployError: row.lastDeployError ?? null,
 		published: row.published !== false,
+		checkDetailsEnabled: row.checkDetailsEnabled === true,
+		checkDetailsIncludeErrors: row.checkDetailsIncludeErrors === true,
 		deletedAt: row.deletedAt ?? null
 	};
 }

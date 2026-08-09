@@ -37,6 +37,8 @@
 			lastDeployError: string | null;
 			lastDeployedAt: Date | string | null;
 			published: boolean;
+			checkDetailsEnabled: boolean;
+			checkDetailsIncludeErrors: boolean;
 			deletedAt: Date | string | null;
 			undeleteExpiresAt: Date | string | null;
 			canManageLifecycle?: boolean;
@@ -55,6 +57,7 @@
 	let draftLogoUrl = $state('');
 	let logoPreviewFailed = $state(false);
 	let confirmInput = $state('');
+	let draftCheckDetails = $state(false);
 
 	$effect(() => {
 		draftSlug = project.slug;
@@ -63,6 +66,7 @@
 		draftBaseDomain = project.publishBaseDomain ?? '';
 		draftPathPrefix = project.publishPathPrefix || 's';
 		draftLogoUrl = project.theme.logoUrl;
+		draftCheckDetails = project.checkDetailsEnabled;
 		logoPreviewFailed = false;
 	});
 
@@ -81,8 +85,7 @@
 
 	const cnameTarget = $derived(
 		cnameTargetForProvider(draftProvider, {
-			deployProviderId:
-				draftProvider === project.hostProvider ? project.deployProviderId : null,
+			deployProviderId: draftProvider === project.hostProvider ? project.deployProviderId : null,
 			deployUrl: draftProvider === project.hostProvider ? project.deployUrl : null
 		})
 	);
@@ -94,9 +97,15 @@
 	<div class="flex items-center gap-2 mb-1.5 flex-wrap">
 		<h2 class="text-lg font-semibold m-0">{project.name}</h2>
 		{#if isDeleted}
-			<span class="inline-block text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wide bg-error-500 text-white">Deleted</span>
+			<span
+				class="inline-block text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wide bg-error-500 text-white"
+				>Deleted</span
+			>
 		{:else if !project.published}
-			<span class="inline-block text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wide bg-warning-500 text-white">Unpublished</span>
+			<span
+				class="inline-block text-xs font-semibold px-2 py-0.5 rounded uppercase tracking-wide bg-warning-500 text-white"
+				>Unpublished</span
+			>
 		{/if}
 	</div>
 
@@ -105,7 +114,9 @@
 			<p class="text-sm text-surface-500 mb-3">
 				This project has been soft-deleted.
 				{#if project.undeleteExpiresAt}
-					It will be permanently removed after {new Date(project.undeleteExpiresAt).toLocaleDateString()}
+					It will be permanently removed after {new Date(
+						project.undeleteExpiresAt
+					).toLocaleDateString()}
 					({formatPurgeCountdown(project.undeleteExpiresAt)}).
 				{:else}
 					You have a 7-day grace period to restore it.
@@ -120,9 +131,7 @@
 					method="post"
 					action="?/purge"
 					use:enhance={({ cancel }) => {
-						const ok = confirm(
-							`Permanently delete "${project.name}"? This cannot be undone.`
-						);
+						const ok = confirm(`Permanently delete "${project.name}"? This cannot be undone.`);
 						if (!ok) cancel();
 					}}
 				>
@@ -162,7 +171,9 @@
 			<p class="text-error-500 text-sm">Last deploy error: {project.lastDeployError}</p>
 		{/if}
 		{#if project.lastDeployedAt}
-			<p class="text-sm text-surface-500">Last deployed {new Date(project.lastDeployedAt).toLocaleString()}</p>
+			<p class="text-sm text-surface-500">
+				Last deployed {new Date(project.lastDeployedAt).toLocaleString()}
+			</p>
 		{/if}
 
 		<form
@@ -236,6 +247,43 @@
 				<span class="label-text">Description</span>
 				<input class="input" name="description" value={project.description ?? ''} />
 			</label>
+			<h3 class="text-base font-semibold mt-2 mb-1">Check details</h3>
+			<div class="flex flex-col gap-2">
+				<label class="label flex flex-row items-start gap-2">
+					<input
+						class="checkbox mt-1"
+						type="checkbox"
+						name="checkDetailsEnabled"
+						bind:checked={draftCheckDetails}
+					/>
+					<span class="label-text">
+						Let visitors open check details
+						<span class="block text-surface-500 text-xs font-normal">
+							Clicking a bar on the uptime history shows that day's uptime, how many checks ran, and
+							when they failed.
+						</span>
+					</span>
+				</label>
+				<label class="label flex flex-row items-start gap-2">
+					<input
+						class="checkbox mt-1"
+						type="checkbox"
+						name="checkDetailsIncludeErrors"
+						checked={project.checkDetailsIncludeErrors}
+						disabled={!draftCheckDetails}
+					/>
+					<span class="label-text" class:opacity-50={!draftCheckDetails}>
+						Include status codes and error messages
+						<span class="block text-surface-500 text-xs font-normal">
+							Also shows the probe target and the raw error text. Database and TCP errors can name
+							internal hosts and ports, so leave this off for a public page.
+						</span>
+					</span>
+				</label>
+				<p class="text-surface-500 text-xs m-0">
+					Your team always sees the full detail in the project preview.
+				</p>
+			</div>
 			<h3 class="text-base font-semibold mt-2 mb-1">Theme</h3>
 			<div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
 				<label class="label">
@@ -272,35 +320,75 @@
 			<div class="grid grid-cols-[repeat(auto-fit,minmax(70px,1fr))] gap-2">
 				<label class="label text-xs gap-1">
 					<span class="label-text">BG</span>
-					<input class="w-10 h-8 p-0 border border-surface-300-700 rounded" name="themeColorBg" type="color" value={project.theme.colors.bg} />
+					<input
+						class="w-10 h-8 p-0 border border-surface-300-700 rounded"
+						name="themeColorBg"
+						type="color"
+						value={project.theme.colors.bg}
+					/>
 				</label>
 				<label class="label text-xs gap-1">
 					<span class="label-text">Ink</span>
-					<input class="w-10 h-8 p-0 border border-surface-300-700 rounded" name="themeColorInk" type="color" value={project.theme.colors.ink} />
+					<input
+						class="w-10 h-8 p-0 border border-surface-300-700 rounded"
+						name="themeColorInk"
+						type="color"
+						value={project.theme.colors.ink}
+					/>
 				</label>
 				<label class="label text-xs gap-1">
 					<span class="label-text">Accent</span>
-					<input class="w-10 h-8 p-0 border border-surface-300-700 rounded" name="themeColorAccent" type="color" value={project.theme.colors.accent} />
+					<input
+						class="w-10 h-8 p-0 border border-surface-300-700 rounded"
+						name="themeColorAccent"
+						type="color"
+						value={project.theme.colors.accent}
+					/>
 				</label>
 				<label class="label text-xs gap-1">
 					<span class="label-text">OK</span>
-					<input class="w-10 h-8 p-0 border border-surface-300-700 rounded" name="themeColorOk" type="color" value={project.theme.colors.ok} />
+					<input
+						class="w-10 h-8 p-0 border border-surface-300-700 rounded"
+						name="themeColorOk"
+						type="color"
+						value={project.theme.colors.ok}
+					/>
 				</label>
 				<label class="label text-xs gap-1">
 					<span class="label-text">Warn</span>
-					<input class="w-10 h-8 p-0 border border-surface-300-700 rounded" name="themeColorWarn" type="color" value={project.theme.colors.warn} />
+					<input
+						class="w-10 h-8 p-0 border border-surface-300-700 rounded"
+						name="themeColorWarn"
+						type="color"
+						value={project.theme.colors.warn}
+					/>
 				</label>
 				<label class="label text-xs gap-1">
 					<span class="label-text">Bad</span>
-					<input class="w-10 h-8 p-0 border border-surface-300-700 rounded" name="themeColorBad" type="color" value={project.theme.colors.bad} />
+					<input
+						class="w-10 h-8 p-0 border border-surface-300-700 rounded"
+						name="themeColorBad"
+						type="color"
+						value={project.theme.colors.bad}
+					/>
 				</label>
 				<label class="label text-xs gap-1">
 					<span class="label-text">Muted</span>
-					<input class="w-10 h-8 p-0 border border-surface-300-700 rounded" name="themeColorMuted" type="color" value={project.theme.colors.muted} />
+					<input
+						class="w-10 h-8 p-0 border border-surface-300-700 rounded"
+						name="themeColorMuted"
+						type="color"
+						value={project.theme.colors.muted}
+					/>
 				</label>
 				<label class="label text-xs gap-1">
 					<span class="label-text">Line</span>
-					<input class="w-10 h-8 p-0 border border-surface-300-700 rounded" name="themeColorLine" type="color" value={project.theme.colors.line} />
+					<input
+						class="w-10 h-8 p-0 border border-surface-300-700 rounded"
+						name="themeColorLine"
+						type="color"
+						value={project.theme.colors.line}
+					/>
 				</label>
 			</div>
 		</form>
@@ -332,7 +420,8 @@
 
 		{#if project.canManageLifecycle}
 			<details class="mt-4 border-t border-surface-200-800 pt-3">
-				<summary class="text-sm text-surface-500 cursor-pointer select-none">Delete project</summary>
+				<summary class="text-sm text-surface-500 cursor-pointer select-none">Delete project</summary
+				>
 				<div class="mt-2">
 					<p class="text-sm text-surface-500 mb-2">
 						Type <strong>{project.name}</strong> to confirm deletion. You will have 7 days to restore
@@ -347,8 +436,10 @@
 								bind:value={confirmInput}
 								placeholder={project.name}
 							/>
-							<button class="btn preset-filled-error-500" type="submit" disabled={confirmInput !== project.name}
-								>Delete</button
+							<button
+								class="btn preset-filled-error-500"
+								type="submit"
+								disabled={confirmInput !== project.name}>Delete</button
 							>
 						</div>
 					</form>

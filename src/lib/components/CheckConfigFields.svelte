@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { PublicCheckSettings } from '$lib/checks';
+	import { HTTP_AUTH_MODES, httpAuthModeLabel, type PublicCheckSettings } from '$lib/checks';
 
 	let {
 		checkTypes,
@@ -33,6 +33,13 @@
 
 	let authenticated = $state(untrack(() => initialAuthenticated()));
 
+	function initialHttpAuth(): string {
+		if (!settings || settings.type !== 'http' || initialType !== 'http') return 'none';
+		return settings.auth;
+	}
+
+	let httpAuthMode = $state(untrack(() => initialHttpAuth()));
+
 	function onCheckTypeChange(event: Event) {
 		const next = (event.currentTarget as HTMLSelectElement).value;
 		checkType = next;
@@ -45,6 +52,7 @@
 		} else {
 			authenticated = false;
 		}
+		httpAuthMode = settings?.type === 'http' && next === 'http' ? settings.auth : 'none';
 	}
 
 	const tcp = $derived(settings?.type === 'tcp' && checkType === 'tcp' ? settings : null);
@@ -58,6 +66,9 @@
 			: null
 	);
 	const redis = $derived(settings?.type === 'redis' && checkType === 'redis' ? settings : null);
+	const http = $derived(settings?.type === 'http' && checkType === 'http' ? settings : null);
+	/** Only offer to keep the stored secret when it belongs to the selected method. */
+	const keepsCredential = $derived(Boolean(http?.hasCredential) && http?.auth === httpAuthMode);
 </script>
 
 <div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
@@ -84,13 +95,71 @@
 		</label>
 		<label class="label">
 			<span class="label-text">Expected status</span>
-			<input
-				class="input"
-				name="expectedStatus"
-				type="number"
-				value={expectedStatus ?? 200}
-			/>
+			<input class="input" name="expectedStatus" type="number" value={expectedStatus ?? 200} />
 		</label>
+		<label class="label">
+			<span class="label-text">Authentication</span>
+			<select class="select" name="httpAuthMode" bind:value={httpAuthMode}>
+				{#each HTTP_AUTH_MODES as mode (mode)}
+					<option value={mode}>{httpAuthModeLabel(mode)}</option>
+				{/each}
+			</select>
+		</label>
+		{#if httpAuthMode === 'bearer'}
+			<label class="label">
+				<span class="label-text">Token</span>
+				<input
+					class="input"
+					name="httpAuthToken"
+					type="password"
+					value=""
+					placeholder={keepsCredential ? 'Leave blank to keep existing' : ''}
+					required={!keepsCredential}
+					autocomplete="new-password"
+				/>
+				<span class="text-surface-500 text-xs">Sent as <code>Authorization: Bearer ...</code></span>
+			</label>
+		{:else if httpAuthMode === 'basic'}
+			<label class="label">
+				<span class="label-text">Username</span>
+				<input class="input" name="httpAuthUsername" value={http?.username ?? ''} required />
+			</label>
+			<label class="label">
+				<span class="label-text">Password</span>
+				<input
+					class="input"
+					name="httpAuthPassword"
+					type="password"
+					value=""
+					placeholder={keepsCredential ? 'Leave blank to keep existing' : ''}
+					required={!keepsCredential}
+					autocomplete="new-password"
+				/>
+			</label>
+		{:else if httpAuthMode === 'header'}
+			<label class="label">
+				<span class="label-text">Header name</span>
+				<input
+					class="input"
+					name="httpAuthHeaderName"
+					value={http?.headerName ?? ''}
+					placeholder="X-API-Key"
+					required
+				/>
+			</label>
+			<label class="label">
+				<span class="label-text">Header value</span>
+				<input
+					class="input"
+					name="httpAuthHeaderValue"
+					type="password"
+					value=""
+					placeholder={keepsCredential ? 'Leave blank to keep existing' : ''}
+					required={!keepsCredential}
+					autocomplete="new-password"
+				/>
+			</label>
+		{/if}
 	{:else if checkType === 'tcp'}
 		<label class="label">
 			<span class="label-text">Host</span>
@@ -155,12 +224,7 @@
 			/>
 		</label>
 		<label class="label flex flex-row items-center gap-2 self-end pb-2">
-			<input
-				class="checkbox"
-				type="checkbox"
-				name="authenticated"
-				bind:checked={authenticated}
-			/>
+			<input class="checkbox" type="checkbox" name="authenticated" bind:checked={authenticated} />
 			<span class="label-text">Authenticated</span>
 		</label>
 		{#if authenticated}
@@ -199,12 +263,7 @@
 			<input class="input" name="port" type="number" value={redis?.port ?? 6379} />
 		</label>
 		<label class="label flex flex-row items-center gap-2 self-end pb-2">
-			<input
-				class="checkbox"
-				type="checkbox"
-				name="authenticated"
-				bind:checked={authenticated}
-			/>
+			<input class="checkbox" type="checkbox" name="authenticated" bind:checked={authenticated} />
 			<span class="label-text">Authenticated</span>
 		</label>
 		{#if authenticated}

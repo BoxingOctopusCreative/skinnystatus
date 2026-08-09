@@ -1,10 +1,14 @@
 import {
 	DNS_RECORD_TYPES,
 	isCheckType,
+	isHttpAuthMode,
+	isValidHeaderName,
+	isValidHeaderValue,
 	type CheckType,
 	type DbCheckConfig,
 	type DnsCheckConfig,
 	type DnsRecordType,
+	type HttpCheckConfig,
 	type PublicCheckSettings,
 	type RedisCheckConfig,
 	type SslCheckConfig,
@@ -59,7 +63,9 @@ function isDnsRecordType(value: string): value is DnsRecordType {
 	return (DNS_RECORD_TYPES as readonly string[]).includes(value);
 }
 
-export function decryptCheckConfig<T extends StoredCheckConfig>(ciphertext: string | null): T | null {
+export function decryptCheckConfig<T extends StoredCheckConfig>(
+	ciphertext: string | null
+): T | null {
 	if (!ciphertext) return null;
 	return decryptJson<T>(ciphertext);
 }
@@ -69,13 +75,31 @@ export function toPublicCheckSettings(
 	checkConfig: string | null
 ): PublicCheckSettings | null {
 	if (!checkType || !isCheckType(checkType)) return null;
-	if (checkType === 'http') return { type: 'http' };
+
+	const noHttpAuth: PublicCheckSettings = {
+		type: 'http',
+		auth: 'none',
+		hasCredential: false,
+		username: '',
+		headerName: ''
+	};
 
 	try {
 		const cfg = decryptCheckConfig(checkConfig);
-		if (!cfg) return null;
+		if (!cfg) return checkType === 'http' ? noHttpAuth : null;
 
 		switch (checkType) {
+			case 'http': {
+				const c = cfg as HttpCheckConfig;
+				if (!isHttpAuthMode(c.auth ?? '')) return noHttpAuth;
+				return {
+					type: 'http',
+					auth: c.auth,
+					hasCredential: Boolean(c.token || c.password || c.headerValue),
+					username: c.username ?? '',
+					headerName: c.headerName ?? ''
+				};
+			}
 			case 'tcp': {
 				const c = cfg as TcpCheckConfig;
 				return { type: 'tcp', host: c.host, port: c.port };
@@ -125,8 +149,69 @@ export function toPublicCheckSettings(
 			}
 		}
 	} catch {
-		return null;
+		return checkType === 'http' ? noHttpAuth : null;
 	}
+}
+
+/**
+ * Credentials for an HTTP check. Secrets left blank in the form keep whatever is
+ * already stored, so an operator can edit a URL without retyping a token. The
+ * previous config only carries over when the service was already an HTTP check,
+ * so a database password can never become a bearer token.
+ */
+function parseHttpAuthConfig(
+	form: FormData,
+	existing?: { checkType: string | null; checkConfig: string | null }
+): { ok: true; value: HttpCheckConfig | null } | { ok: false; message: string } {
+	const modeRaw = emptyToNull(form.get('httpAuthMode')) ?? 'none';
+	if (!isHttpAuthMode(modeRaw)) {
+		return { ok: false, message: 'Invalid HTTP authentication method' };
+	}
+	if (modeRaw === 'none') return { ok: true, value: null };
+
+	const prev =
+		existing?.checkType === 'http'
+			? decryptCheckConfig<HttpCheckConfig>(existing.checkConfig)
+			: null;
+	const carryOver = prev?.auth === modeRaw ? prev : null;
+
+	if (modeRaw === 'bearer') {
+		const token = emptyToNull(form.get('httpAuthToken')) ?? carryOver?.token;
+		if (!token) return { ok: false, message: 'A token is required for bearer authentication' };
+		if (!isValidHeaderValue(token)) {
+			return { ok: false, message: 'Token cannot contain line breaks' };
+		}
+		return { ok: true, value: { auth: 'bearer', token } };
+	}
+
+	if (modeRaw === 'basic') {
+		const username = emptyToNull(form.get('httpAuthUsername'));
+		if (!username) return { ok: false, message: 'A username is required for basic authentication' };
+		if (username.includes(':')) {
+			return { ok: false, message: 'Basic auth usernames cannot contain a colon' };
+		}
+		const password = emptyToNull(form.get('httpAuthPassword')) ?? carryOver?.password;
+		if (!password) return { ok: false, message: 'A password is required for basic authentication' };
+		if (!isValidHeaderValue(username) || !isValidHeaderValue(password)) {
+			return { ok: false, message: 'Credentials cannot contain line breaks' };
+		}
+		return { ok: true, value: { auth: 'basic', username, password } };
+	}
+
+	const headerName = emptyToNull(form.get('httpAuthHeaderName'));
+	if (!headerName) return { ok: false, message: 'A header name is required' };
+	if (!isValidHeaderName(headerName)) {
+		return {
+			ok: false,
+			message: "Header name can only contain letters, digits, and the characters !#$%&'*+-.^_`|~"
+		};
+	}
+	const headerValue = emptyToNull(form.get('httpAuthHeaderValue')) ?? carryOver?.headerValue;
+	if (!headerValue) return { ok: false, message: 'A header value is required' };
+	if (!isValidHeaderValue(headerValue)) {
+		return { ok: false, message: 'Header value cannot contain line breaks' };
+	}
+	return { ok: true, value: { auth: 'header', headerName, headerValue } };
 }
 
 export function parseCheckFieldsFromForm(
@@ -154,13 +239,15 @@ export function parseCheckFieldsFromForm(
 		if (!checkUrl) {
 			return { ok: false, message: 'Check URL is required for HTTP checks' };
 		}
+		const auth = parseHttpAuthConfig(form, existing);
+		if (!auth.ok) return { ok: false, message: auth.message };
 		return {
 			ok: true,
 			value: {
 				checkType: 'http',
 				checkUrl,
 				expectedStatus: Number(form.get('expectedStatus') ?? 200) || 200,
-				checkConfig: null
+				checkConfig: auth.value ? encryptJson(auth.value) : null
 			}
 		};
 	}
